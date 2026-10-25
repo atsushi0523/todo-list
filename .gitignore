@@ -1,0 +1,16 @@
+# 秘密の情報（絶対にGitに入れない）
+.env
+*.json
+!package.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# エディタ・OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

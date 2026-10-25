@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% macro field(f) %}
+<div class="mb-3">
+  {{ f.label(class="form-label fw-semibold") }}
+  {% if f.flags.required %}<span class="badge text-bg-secondary ms-1">必須</span>{% endif %}
+  {{ f(class="form-control" ~ (" is-invalid" if f.errors else ""), **kwargs) }}
+  {% for error in f.errors %}
+  <div class="invalid-feedback">{{ error }}</div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% block title %}{{ heading }} | Todoリスト{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">{{ heading }}</h1>
+
+<form method="post" class="card card-body shadow-sm">
+  {{ form.csrf_token }}
+  {{ field(form.title) }}
+  {{ field(form.content, rows=5) }}
+  {{ field(form.due_date) }}
+  <div class="d-flex gap-2">
+    {{ form.submit(class="btn btn-primary") }}
+    <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">キャンセル</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,42 @@
+.app-container {
+  max-width: 800px;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.todo-title,
+.todo-content {
+  overflow-wrap: anywhere;
+}
+
+.todo-content {
+  white-space: pre-line;
+}
+
+.todo-item .form-check-input {
+  width: 1.3em;
+  height: 1.3em;
+  cursor: pointer;
+}
+
+/* 完了済み：取り消し線とグレー表示 */
+.todo-done {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+}
+
+.todo-done .todo-title {
+  text-decoration: line-through;
+}
+
+/* 期限切れ：左の赤線と赤字の期日 */
+.todo-overdue {
+  box-shadow: inset 4px 0 0 var(--bs-danger);
+}
+
+.todo-overdue .todo-due {
+  color: var(--bs-danger);
+  font-weight: 600;
+}
