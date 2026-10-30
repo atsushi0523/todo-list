@@ -1,41 +1,11 @@
 {% extends "base.html" %}
+{% from "_macros.html" import tabs, todo_list with context %}
 
 {% block content %}
-<h1 class="h4 mb-3">やること一覧</h1>
+{{ tabs(page, active_count, done_count) }}
 
 {% if todos %}
-<ul class="list-group shadow-sm">
-  {% for todo in todos %}
-  <li class="list-group-item d-flex gap-3 align-items-start todo-item{% if todo.done %} todo-done{% elif todo.overdue %} todo-overdue{% endif %}">
-    <form method="post" action="{{ url_for('toggle', todo_id=todo.id) }}" class="pt-1">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input class="form-check-input js-auto-submit" type="checkbox" {% if todo.done %}checked{% endif %}
-             aria-label="「{{ todo.title }}」の完了を切り替える">
-      <noscript><button class="btn btn-sm btn-outline-secondary mt-1">切替</button></noscript>
-    </form>
-
-    <div class="flex-grow-1 min-w-0">
-      <div class="fw-semibold todo-title">{{ todo.title }}</div>
-      {% if todo.content %}
-      <div class="small text-body-secondary todo-content">{{ todo.content | truncate(60, true) }}</div>
-      {% endif %}
-      <div class="small mt-1 todo-due">
-        期日：{{ todo.due_date }}
-        {% if todo.overdue %}<span class="badge text-bg-danger ms-1">期限切れ</span>{% endif %}
-      </div>
-    </div>
-
-    <div class="d-flex gap-1 flex-shrink-0">
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('edit', todo_id=todo.id) }}">編集</a>
-      <form method="post" action="{{ url_for('delete', todo_id=todo.id) }}"
-            data-confirm="「{{ todo.title }}」を削除しますか？">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-sm btn-outline-danger">削除</button>
-      </form>
-    </div>
-  </li>
-  {% endfor %}
-</ul>
+{{ todo_list(todos, page) }}
 {% else %}
 <div class="card card-body text-center py-5 shadow-sm">
   <p class="text-body-secondary mb-3">やることはまだありません</p>

@@ -27,14 +27,56 @@ def test_index_empty(client):
     assert 'href="/new"' in html
 
 
-def test_index_sorted_by_done_then_due_date(client, storage):
+def test_index_sorted_by_due_date(client, storage):
     storage.add("あとの期日", "", "2026-12-01")
-    done = storage.add("完了済み", "", "2026-01-01")
+    storage.add("一番近い期日", "", "2026-10-01")
     storage.add("近い期日", "", "2026-11-01")
+
+    html = client.get("/").get_data(as_text=True)
+    assert html.index("一番近い期日") < html.index("近い期日") < html.index("あとの期日")
+
+
+def test_index_hides_done(client, storage):
+    storage.add("やること", "", "2026-10-25")
+    done = storage.add("終わったこと", "", "2026-10-25")
     storage.toggle(done["id"])
 
     html = client.get("/").get_data(as_text=True)
-    assert html.index("近い期日") < html.index("あとの期日") < html.index("完了済み")
+    assert "やること" in html
+    assert "終わったこと" not in html
+
+
+def test_index_shows_counts(client, storage):
+    storage.add("1件目", "", "2026-10-25")
+    storage.add("2件目", "", "2026-10-25")
+    done = storage.add("終わったこと", "", "2026-10-25")
+    storage.toggle(done["id"])
+
+    html = client.get("/").get_data(as_text=True)
+    assert 'text-bg-primary">2</span>' in html
+    assert 'text-bg-secondary">1</span>' in html
+
+
+# --- 完了済みページ ---
+
+
+def test_done_page_empty(client, storage):
+    storage.add("まだのこと", "", "2026-10-25")
+
+    html = client.get("/done").get_data(as_text=True)
+    assert "完了したやることはまだありません" in html
+    assert "まだのこと" not in html
+
+
+def test_done_page_lists_only_done(client, storage):
+    storage.add("まだのこと", "", "2026-10-25")
+    done = storage.add("終わったこと", "", "2026-10-25")
+    storage.toggle(done["id"])
+
+    html = client.get("/done").get_data(as_text=True)
+    assert "終わったこと" in html
+    assert "まだのこと" not in html
+    assert "todo-done" in html
 
 
 def test_index_highlights_overdue(client, storage):
@@ -50,7 +92,7 @@ def test_done_item_is_not_overdue(client, storage):
     todo = storage.add("終わったもの", "", days_from_today(-1))
     storage.toggle(todo["id"])
 
-    html = client.get("/").get_data(as_text=True)
+    html = client.get("/done").get_data(as_text=True)
     assert "todo-done" in html
     assert "todo-overdue" not in html
 
@@ -150,6 +192,18 @@ def test_edit(client, storage):
     assert updated["created_at"] == todo["created_at"]
 
 
+def test_edit_from_done_page_returns_there(client, storage):
+    todo = storage.add("終わったこと", "", "2026-10-25")
+    storage.toggle(todo["id"])
+
+    html = client.get(f"/edit/{todo['id']}?next=done").get_data(as_text=True)
+    assert 'href="/done"' in html  # キャンセルで完了済みページに戻る
+
+    res = client.post(f"/edit/{todo['id']}?next=done", data=valid_data(title="直したこと"), follow_redirects=True)
+    assert res.request.path == "/done"
+    assert storage.get(todo["id"])["done"] is True
+
+
 def test_edit_rejects_invalid_input(client, storage):
     todo = storage.add("元のタイトル", "", "2026-10-25")
 
@@ -179,6 +233,16 @@ def test_delete(client, storage):
     assert [t["id"] for t in storage.list_all()] == [keep["id"]]
 
 
+def test_delete_from_done_page_returns_there(client, storage):
+    todo = storage.add("終わったこと", "", "2026-10-25")
+    storage.toggle(todo["id"])
+
+    res = client.post(f"/delete/{todo['id']}", data={"next": "done"}, follow_redirects=True)
+
+    assert res.request.path == "/done"
+    assert storage.list_all() == []
+
+
 def test_delete_requires_post(client, storage):
     todo = storage.add("消さないもの", "", "2026-10-25")
 
@@ -193,15 +257,24 @@ def test_delete_unknown_id(client):
 # --- 完了切り替え ---
 
 
-def test_toggle(client, storage):
+def test_toggle_moves_to_done_page_and_back(client, storage):
     todo = storage.add("切り替えるもの", "", "2026-10-25")
 
-    res = client.post(f"/toggle/{todo['id']}", follow_redirects=True)
+    # 一覧で完了にすると、一覧から消えて完了済みページに出る
+    res = client.post(f"/toggle/{todo['id']}", data={"next": "index"}, follow_redirects=True)
+    html = res.get_data(as_text=True)
     assert res.request.path == "/"
+    assert "完了にしました" in html
+    assert "切り替えるもの" not in html
     assert storage.get(todo["id"])["done"] is True
+    assert "切り替えるもの" in client.get("/done").get_data(as_text=True)
 
-    client.post(f"/toggle/{todo['id']}")
+    # 完了済みページでチェックを外すと、完了済みページに戻り、一覧に再び出る
+    res = client.post(f"/toggle/{todo['id']}", data={"next": "done"}, follow_redirects=True)
+    assert res.request.path == "/done"
+    assert "未完了に戻しました" in res.get_data(as_text=True)
     assert storage.get(todo["id"])["done"] is False
+    assert "切り替えるもの" in client.get("/").get_data(as_text=True)
 
 
 def test_toggle_requires_post(client, storage):

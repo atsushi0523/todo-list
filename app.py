@@ -10,9 +10,19 @@ from forms import TodoForm
 from sheets import StorageError, create_storage, now_jst
 
 
-def sort_todos(todos):
-    """未完了を先に、そのなかで期日の近い順。完了済みは後ろにまとめる"""
-    return sorted(todos, key=lambda todo: (todo["done"], todo["due_date"] or "9999-12-31", todo["created_at"]))
+def sort_active(todos):
+    """未完了のやることを期日の近い順に並べる"""
+    return sorted(todos, key=lambda todo: (todo["due_date"] or "9999-12-31", todo["created_at"]))
+
+
+def sort_done(todos):
+    """完了済みのやることを、完了した（最後に更新した）日時の新しい順に並べる"""
+    return sorted(todos, key=lambda todo: todo["updated_at"], reverse=True)
+
+
+def back_endpoint():
+    """操作のあとに戻るページ。完了済みページから来たときは完了済みページへ戻る"""
+    return "done_list" if request.values.get("next") == "done" else "index"
 
 
 def create_app(storage=None, config=None):
@@ -28,14 +38,29 @@ def create_app(storage=None, config=None):
     if storage is None:
         storage = create_storage()
 
+    def load_todos():
+        """未完了と完了済みに分けて返す。Sheets APIの回数制限があるので、1回の表示で読み込むのは1回だけ"""
+        todos = storage.list_all()
+        active = [todo for todo in todos if not todo["done"]]
+        done = [todo for todo in todos if todo["done"]]
+        return active, done
+
     @app.get("/")
     def index():
-        # Sheets APIの回数制限があるので、1回の表示で読み込むのは1回だけ
-        todos = sort_todos(storage.list_all())
+        active, done = load_todos()
         today = now_jst().strftime("%Y-%m-%d")
-        for todo in todos:
-            todo["overdue"] = not todo["done"] and bool(todo["due_date"]) and todo["due_date"] < today
-        return render_template("index.html", todos=todos)
+        for todo in active:
+            todo["overdue"] = bool(todo["due_date"]) and todo["due_date"] < today
+        return render_template(
+            "index.html", todos=sort_active(active), page="index", active_count=len(active), done_count=len(done)
+        )
+
+    @app.get("/done")
+    def done_list():
+        active, done = load_todos()
+        return render_template(
+            "done.html", todos=sort_done(done), page="done", active_count=len(active), done_count=len(done)
+        )
 
     @app.route("/new", methods=["GET", "POST"])
     def new():
@@ -44,7 +69,7 @@ def create_app(storage=None, config=None):
             storage.add(**form.todo_values())
             flash("登録しました", "success")
             return redirect(url_for("index"))
-        return render_template("form.html", form=form, heading="新規登録")
+        return render_template("form.html", form=form, heading="新規登録", back_url=url_for("index"))
 
     @app.route("/edit/<todo_id>", methods=["GET", "POST"])
     def edit(todo_id):
@@ -59,22 +84,25 @@ def create_app(storage=None, config=None):
             if not storage.update(todo_id, **form.todo_values()):
                 abort(404)
             flash("更新しました", "success")
-            return redirect(url_for("index"))
-        return render_template("form.html", form=form, heading="編集")
+            return redirect(url_for(back_endpoint()))
+        return render_template("form.html", form=form, heading="編集", back_url=url_for(back_endpoint()))
 
     @app.post("/delete/<todo_id>")
     def delete(todo_id):
         if not storage.delete(todo_id):
             abort(404)
         flash("削除しました", "success")
-        return redirect(url_for("index"))
+        return redirect(url_for(back_endpoint()))
 
     @app.post("/toggle/<todo_id>")
     def toggle(todo_id):
         if not storage.toggle(todo_id):
             abort(404)
-        flash("完了状態を切り替えました", "success")
-        return redirect(url_for("index"))
+        if back_endpoint() == "done_list":
+            flash("未完了に戻しました", "success")
+        else:
+            flash("完了にしました。完了済みページで確認できます", "success")
+        return redirect(url_for(back_endpoint()))
 
     @app.errorhandler(404)
     def not_found(e):
