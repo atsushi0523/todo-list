@@ -2,7 +2,7 @@
 
 やることの登録・編集・一覧表示ができるWebアプリです。データはGoogleスプレッドシートに保存します。
 
-- デモ：（Renderにデプロイしたらここに URL を書く）
+- デモ：（Vercelのデモ URL をここに書く）
 - ステップ1ではログインがなく、URLを知っている人全員で1つのリストを共有します
 
 <!-- スクリーンショット：docs/screenshot.png を置いたら下の行を有効にする -->
@@ -28,12 +28,12 @@
 | スプレッドシート連携 | gspread / google-auth（サービスアカウント） |
 | 見た目 | Bootstrap 5 |
 | テスト | pytest |
-| 本番 | gunicorn / Render |
+| 本番 | Vercel（サーバーレス関数） |
 
 ## 構成
 
 ```
-[ブラウザ] ──HTTP──▶ [Flaskアプリ（Render）] ──Sheets API──▶ [Googleスプレッドシート]
+[ブラウザ] ──HTTP──▶ [Flaskアプリ（Vercel）] ──Sheets API──▶ [Googleスプレッドシート]
                               │
                               └─ サービスアカウントの鍵（環境変数）で認証
 ```
@@ -45,6 +45,7 @@
 | `forms.py` | フォームの定義と入力チェック |
 | `templates/` | 一覧・フォーム・エラーのHTML |
 | `static/` | CSS と、小さな JavaScript（完了チェックの送信、削除の確認） |
+| `wsgi.py` | 本番（Vercel）から読み込むエントリポイント |
 | `tests/` | pytest |
 
 ## セットアップ（ローカル）
@@ -99,18 +100,11 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 
 > 鍵ファイルと `.env` は `.gitignore` で除外しているので、GitHubには上がりません。
 
-## Renderへのデプロイ
+## Vercelへのデプロイ
 
 1. GitHubにリポジトリを作ってプッシュする
-2. Renderで「New」→「Web Service」を選び、リポジトリをつなぐ
-3. 次のように設定する
-
-| 項目 | 値 |
-| --- | --- |
-| Build Command | `pip install -r requirements.txt` |
-| Start Command | `gunicorn "app:create_app()"` |
-
-4. 「Environment」で環境変数を設定する
+2. [Vercel](https://vercel.com/) で「Add New」→「Project」を選び、GitHubのリポジトリを読み込む
+3. 「Environment Variables」で環境変数を設定して「Deploy」を押す
 
 | 変数名 | 値 |
 | --- | --- |
@@ -118,9 +112,14 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 | `STORAGE` | `sheets` |
 | `SPREADSHEET_ID` | スプレッドシートのID |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | 鍵のJSONファイルの **中身** をそのまま貼り付ける |
-| `PYTHON_VERSION` | `3.12.10` |
 
-無料プランでは、しばらくアクセスがないとスリープし、最初の表示に時間がかかります。
+以降は、GitHubの `main` ブランチにプッシュすると自動でデプロイされます。
+
+> **注意**
+> - Vercelは `pyproject.toml` の `dependencies` から本番用のライブラリを入れ、`[tool.vercel]` の `entrypoint`（`wsgi:app`）からアプリを読み込みます。ライブラリを追加・更新したときは、`requirements.txt` と `pyproject.toml` の両方をそろえてください
+> - `SECRET_KEY` は必ず設定してください。未設定だと起動のたびに値が変わり、Vercelでは処理するサーバーが入れ替わるため、フォームの送信で「画面の有効期限が切れました」というエラーが出やすくなります
+> - `STORAGE=memory` はVercelでは使えません（データがサーバーごとにばらばらになり、すぐに消えます）。本番は必ず `sheets` にしてください
+> - 環境変数を変えたあとは、「Deployments」から再デプロイすると反映されます
 
 ## 工夫した点
 
@@ -132,7 +131,11 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 - **日時は日本時間で記録する**：サーバーの時刻設定に左右されない
 - **セキュリティ**：CSRF対策（Flask-WTF）、テンプレートのエスケープ（XSS対策）。データを変える操作はすべてPOST。削除の確認メッセージはHTMLの属性から読み、インラインのJavaScriptにタイトルを埋め込まない
 
-## 今後の予定（ステップ2）
+## 今後の予定
 
-- Googleアカウントでのログイン（Authlib）
-- ユーザーごとにリストを分ける
+- 期日に時刻を設定できるようにする
+- カレンダー表示
+- LINE連携（LINEでの確認・完了、期日前と毎朝の通知）
+- ログインとユーザーごとのリスト（LINEログインを検討中）
+
+くわしくは [要件定義書](要件定義書.md) の9章を参照してください。
