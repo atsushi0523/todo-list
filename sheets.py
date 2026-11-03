@@ -16,8 +16,11 @@ from datetime import datetime, timedelta, timezone
 # サーバーの時刻設定に左右されないよう、日本時間を固定で使う
 JST = timezone(timedelta(hours=9), "JST")
 
-# スプレッドシートの列の並び（A列〜G列）
-FIELDS = ["id", "title", "content", "due_date", "done", "created_at", "updated_at"]
+# スプレッドシートの列の並び（A列〜H列）。今あるデータを壊さないよう、新しい列は必ず末尾に足す
+FIELDS = ["id", "title", "content", "due_date", "done", "created_at", "updated_at", "due_time"]
+
+# 最後の列の記号（H）。FIELDS が26列を超えることは想定しない
+LAST_COLUMN = chr(ord("A") + len(FIELDS) - 1)
 
 
 class StorageError(Exception):
@@ -32,7 +35,7 @@ def _timestamp():
     return now_jst().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _new_todo(title, content, due_date):
+def _new_todo(title, content, due_date, due_time=""):
     now = _timestamp()
     return {
         "id": str(uuid.uuid4()),
@@ -42,6 +45,7 @@ def _new_todo(title, content, due_date):
         "done": False,
         "created_at": now,
         "updated_at": now,
+        "due_time": due_time,
     }
 
 
@@ -58,16 +62,16 @@ class MemoryStorage:
         todo = self._todos.get(todo_id)
         return dict(todo) if todo else None
 
-    def add(self, title, content, due_date):
-        todo = _new_todo(title, content, due_date)
+    def add(self, title, content, due_date, due_time=""):
+        todo = _new_todo(title, content, due_date, due_time)
         self._todos[todo["id"]] = todo
         return dict(todo)
 
-    def update(self, todo_id, title, content, due_date):
+    def update(self, todo_id, title, content, due_date, due_time=""):
         todo = self._todos.get(todo_id)
         if todo is None:
             return False
-        todo.update(title=title, content=content, due_date=due_date, updated_at=_timestamp())
+        todo.update(title=title, content=content, due_date=due_date, due_time=due_time, updated_at=_timestamp())
         return True
 
     def delete(self, todo_id):
@@ -121,8 +125,9 @@ class SheetsStorage:
     def _ws(self):
         if self._worksheet is None:
             ws = self._open_worksheet()
-            if not ws.row_values(1):
-                ws.update(range_name="A1:G1", values=[FIELDS], value_input_option="RAW")
+            # 空のシートなら見出しを書く。列を足す前に作ったシートなら、見出しを今の列まで延ばす
+            if ws.row_values(1) != FIELDS:
+                ws.update(range_name=f"A1:{LAST_COLUMN}1", values=[FIELDS], value_input_option="RAW")
             self._worksheet = ws
         return self._worksheet
 
@@ -135,7 +140,7 @@ class SheetsStorage:
 
     def _write_row(self, row, todo):
         # RAW で書き込み、日付などがシート側で別の形式に変換されないようにする
-        self._ws().update(range_name=f"A{row}:G{row}", values=[_todo_to_row(todo)], value_input_option="RAW")
+        self._ws().update(range_name=f"A{row}:{LAST_COLUMN}{row}", values=[_todo_to_row(todo)], value_input_option="RAW")
 
     @_wrap_errors
     def list_all(self):
@@ -150,18 +155,18 @@ class SheetsStorage:
         return _row_to_todo(self._ws().row_values(row))
 
     @_wrap_errors
-    def add(self, title, content, due_date):
-        todo = _new_todo(title, content, due_date)
+    def add(self, title, content, due_date, due_time=""):
+        todo = _new_todo(title, content, due_date, due_time)
         self._ws().append_row(_todo_to_row(todo), value_input_option="RAW")
         return todo
 
     @_wrap_errors
-    def update(self, todo_id, title, content, due_date):
+    def update(self, todo_id, title, content, due_date, due_time=""):
         row = self._find_row(todo_id)
         if row is None:
             return False
         todo = _row_to_todo(self._ws().row_values(row))
-        todo.update(title=title, content=content, due_date=due_date, updated_at=_timestamp())
+        todo.update(title=title, content=content, due_date=due_date, due_time=due_time, updated_at=_timestamp())
         self._write_row(row, todo)
         return True
 

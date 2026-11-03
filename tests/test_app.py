@@ -1,9 +1,9 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
-from app import create_app
-from sheets import StorageError, now_jst
+from app import create_app, is_overdue
+from sheets import JST, StorageError, now_jst
 
 
 def days_from_today(days):
@@ -316,3 +316,89 @@ def test_csrf_token_required(storage):
 
     assert "画面の有効期限が切れました" in res.get_data(as_text=True)
     assert storage.list_all() == []
+
+
+# --- 期日の時刻 ---
+
+
+def test_create_with_time(client, storage):
+    client.post("/new", data=valid_data(due_time="9:05"))
+
+    [todo] = storage.list_all()
+    assert todo["due_time"] == "09:05"
+
+
+def test_create_without_time(client, storage):
+    client.post("/new", data=valid_data(due_time=""))
+
+    [todo] = storage.list_all()
+    assert todo["due_time"] == ""
+
+
+@pytest.mark.parametrize("due_time", ["abc", "25:00", "12:60", "12"])
+def test_create_rejects_invalid_time(client, storage, due_time):
+    res = client.post("/new", data=valid_data(due_time=due_time))
+
+    assert res.status_code == 200
+    assert "時刻は正しい時刻を HH:MM の形式で入力してください" in res.get_data(as_text=True)
+    assert storage.list_all() == []
+
+
+def test_edit_form_shows_time(client, storage):
+    todo = storage.add("時刻つき", "", "2026-10-25", "14:30")
+
+    html = client.get(f"/edit/{todo['id']}").get_data(as_text=True)
+    assert 'value="14:30"' in html
+
+
+def test_edit_can_set_and_clear_time(client, storage):
+    todo = storage.add("時刻なし", "", "2026-10-25")
+
+    client.post(f"/edit/{todo['id']}", data=valid_data(due_time="18:00"))
+    assert storage.get(todo["id"])["due_time"] == "18:00"
+
+    client.post(f"/edit/{todo['id']}", data=valid_data(due_time=""))
+    assert storage.get(todo["id"])["due_time"] == ""
+
+
+def test_index_shows_time(client, storage):
+    storage.add("時刻つき", "", "2026-10-25", "14:30")
+
+    html = client.get("/").get_data(as_text=True)
+    assert "2026-10-25 14:30" in html
+
+
+def test_index_sorted_by_time_and_untimed_last(client, storage):
+    storage.add("時刻なし", "", "2026-10-25")
+    storage.add("夕方", "", "2026-10-25", "18:00")
+    storage.add("朝", "", "2026-10-25", "08:00")
+    storage.add("前の日", "", "2026-10-24")
+
+    html = client.get("/").get_data(as_text=True)
+    assert html.index("前の日") < html.index("朝") < html.index("夕方") < html.index("時刻なし")
+
+
+def test_index_highlights_overdue_with_time(client, storage):
+    storage.add("昨日の夜", "", days_from_today(-1), "23:59")
+    storage.add("明日の朝", "", days_from_today(1), "00:00")
+
+    html = client.get("/").get_data(as_text=True)
+    assert html.count("todo-overdue") == 1
+    assert html.index("todo-overdue") < html.index("昨日の夜") < html.index("明日の朝")
+
+
+@pytest.mark.parametrize(
+    "due_date, due_time, expected",
+    [
+        ("2026-11-03", "14:29", True),  # 時刻を過ぎた
+        ("2026-11-03", "14:30", False),  # ちょうどその分はまだ
+        ("2026-11-03", "15:00", False),
+        ("2026-11-03", "", False),  # 時刻なしは今日のうちは期限切れにしない
+        ("2026-11-02", "", True),
+        ("2026-11-02", "23:59", True),
+        ("", "", False),
+    ],
+)
+def test_is_overdue(due_date, due_time, expected):
+    now = datetime(2026, 11, 3, 14, 30, tzinfo=JST)
+    assert is_overdue({"due_date": due_date, "due_time": due_time}, now) is expected

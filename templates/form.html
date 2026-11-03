@@ -8,6 +8,7 @@
   {% for error in f.errors %}
   <div class="invalid-feedback">{{ error }}</div>
   {% endfor %}
+  {% if f.description %}<div class="form-text">{{ f.description }}</div>{% endif %}
 </div>
 {% endmacro %}
 
@@ -20,7 +21,10 @@
   {{ form.csrf_token }}
   {{ field(form.title) }}
   {{ field(form.content, rows=5) }}
-  {{ field(form.due_date) }}
+  <div class="row g-sm-3">
+    <div class="col-sm-6">{{ field(form.due_date) }}</div>
+    <div class="col-sm-6">{{ field(form.due_time) }}</div>
+  </div>
   <div class="d-flex gap-2">
     {{ form.submit(class="btn btn-primary") }}
     <a class="btn btn-outline-secondary" href="{{ back_url }}">キャンセル</a>

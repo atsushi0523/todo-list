@@ -81,3 +81,28 @@ def test_create_storage_rejects_unknown(monkeypatch):
     monkeypatch.setenv("STORAGE", "mysql")
     with pytest.raises(RuntimeError):
         create_storage()
+
+
+def test_extends_old_header_and_reads_old_rows(worksheet):
+    """時刻の列（H列）を足す前に作ったシートも、そのまま使える"""
+    old_header = FIELDS[:7]
+    worksheet.rows = [old_header, ["abc", "前からある", "", "2026-10-25", "FALSE", "2026-10-20 10:00:00", "2026-10-20 10:00:00"]]
+    storage = SheetsStorage(lambda: worksheet)
+
+    [todo] = storage.list_all()
+    assert worksheet.rows[0] == FIELDS
+    assert todo["title"] == "前からある"
+    assert todo["due_time"] == ""
+
+    assert storage.update("abc", "前からある", "", "2026-10-25", "09:00")
+    assert worksheet.rows[1][FIELDS.index("due_time")] == "09:00"
+    assert len(worksheet.rows[1]) == len(FIELDS)
+
+
+def test_toggle_keeps_time(worksheet):
+    storage = SheetsStorage(lambda: worksheet)
+    todo = storage.add("時刻つき", "", "2026-10-25", "14:30")
+
+    storage.toggle(todo["id"])
+
+    assert storage.get(todo["id"])["due_time"] == "14:30"

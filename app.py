@@ -11,8 +11,20 @@ from sheets import StorageError, create_storage, now_jst
 
 
 def sort_active(todos):
-    """未完了のやることを期日の近い順に並べる"""
-    return sorted(todos, key=lambda todo: (todo["due_date"] or "9999-12-31", todo["created_at"]))
+    """未完了のやることを期日・時刻の近い順に並べる。時刻のないものはその日の最後にする"""
+    return sorted(
+        todos,
+        key=lambda todo: (todo["due_date"] or "9999-12-31", todo.get("due_time") or "99:99", todo["created_at"]),
+    )
+
+
+def is_overdue(todo, now):
+    """期限切れかどうか。時刻つきなら期日と時刻を過ぎたとき、時刻なしなら期日が今日より前のとき"""
+    if not todo["due_date"]:
+        return False
+    if todo.get("due_time"):
+        return f"{todo['due_date']} {todo['due_time']}" < now.strftime("%Y-%m-%d %H:%M")
+    return todo["due_date"] < now.strftime("%Y-%m-%d")
 
 
 def sort_done(todos):
@@ -48,9 +60,9 @@ def create_app(storage=None, config=None):
     @app.get("/")
     def index():
         active, done = load_todos()
-        today = now_jst().strftime("%Y-%m-%d")
+        now = now_jst()
         for todo in active:
-            todo["overdue"] = bool(todo["due_date"]) and todo["due_date"] < today
+            todo["overdue"] = is_overdue(todo, now)
         return render_template(
             "index.html", todos=sort_active(active), page="index", active_count=len(active), done_count=len(done)
         )

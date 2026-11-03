@@ -33,7 +33,7 @@
       <div class="small text-body-secondary todo-content">{{ todo.content | truncate(60, true) }}</div>
       {% endif %}
       <div class="small mt-1 todo-due">
-        期日：{{ todo.due_date }}
+        期日：{{ todo.due_date }}{% if todo.due_time %} {{ todo.due_time }}{% endif %}
         {% if todo.overdue %}<span class="badge text-bg-danger ms-1">期限切れ</span>{% endif %}
         {% if todo.done %}<span class="ms-2">完了：{{ todo.updated_at[:16] }}</span>{% endif %}
       </div>
