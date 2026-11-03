@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tabs %}
+
+{% block title %}カレンダー | Todoリスト{% endblock %}
+
+{% block content %}
+{{ tabs(page, active_count, done_count) }}
+
+<div class="card card-body shadow-sm">
+  <div id="calendar"></div>
+  <noscript><p class="text-body-secondary mb-0">カレンダーを表示するには JavaScript を有効にしてください。</p></noscript>
+</div>
+
+<p class="small text-body-secondary mt-2 mb-0 calendar-legend">
+  <span class="legend-dot" style="background-color: #0d6efd"></span>未完了
+  <span class="legend-dot ms-3" style="background-color: #dc3545"></span>期限切れ
+  <span class="legend-dot ms-3" style="background-color: #6c757d"></span>完了済み
+  <span class="ms-3">（押すと編集できます）</span>
+</p>
+
+{# 予定のデータ。tojson が < や > をエスケープするので、タイトルに </script> があっても安全 #}
+<script type="application/json" id="calendar-events">{{ events | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.15/locales/ja.global.min.js"></script>
+<script src="{{ url_for('static', filename='calendar.js') }}"></script>
+{% endblock %}

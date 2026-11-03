@@ -1,4 +1,4 @@
-{# 一覧ページと完了済みページで使い回す部品 #}
+{# 一覧ページ・完了済みページ・カレンダーで使い回す部品 #}
 
 {% macro tabs(page, active_count, done_count) %}
 <ul class="nav nav-tabs mb-3">
@@ -11,6 +11,9 @@
     <a class="nav-link{% if page == 'done' %} active{% endif %}" href="{{ url_for('done_list') }}">
       完了済み <span class="badge rounded-pill text-bg-secondary">{{ done_count }}</span>
     </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link{% if page == 'calendar' %} active{% endif %}" href="{{ url_for('calendar') }}">カレンダー</a>
   </li>
 </ul>
 {% endmacro %}

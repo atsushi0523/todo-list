@@ -40,3 +40,43 @@
   color: var(--bs-danger);
   font-weight: 600;
 }
+
+/* カレンダー */
+.fc .fc-toolbar-title {
+  font-size: 1.25rem;
+}
+
+.fc .fc-event {
+  cursor: pointer;
+}
+
+.fc .todo-event-done .fc-event-title,
+.fc .todo-event-done .fc-list-event-title {
+  text-decoration: line-through;
+}
+
+@media (max-width: 575.98px) {
+  .fc .fc-toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1.1rem;
+  }
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-right: 0.25em;
+  border-radius: 50%;
+  vertical-align: -0.05em;
+}
+
+/* 日付や曜日のリンクに Bootstrap の下線と青色がつかないようにする */
+.fc a:not(.fc-event) {
+  color: inherit;
+  text-decoration: none;
+}

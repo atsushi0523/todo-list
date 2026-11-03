@@ -1,3 +1,5 @@
+import json
+import re
 from datetime import datetime, timedelta
 
 import pytest
@@ -402,3 +404,86 @@ def test_index_highlights_overdue_with_time(client, storage):
 def test_is_overdue(due_date, due_time, expected):
     now = datetime(2026, 11, 3, 14, 30, tzinfo=JST)
     assert is_overdue({"due_date": due_date, "due_time": due_time}, now) is expected
+
+
+# --- カレンダー ---
+
+
+def calendar_events_from(html):
+    """カレンダーページに埋め込んだ予定の JSON を取り出す"""
+    match = re.search(r'<script type="application/json" id="calendar-events">(.*?)</script>', html, re.S)
+    return json.loads(match[1])
+
+
+def test_calendar_page(client, storage):
+    storage.add("時刻つき", "", "2026-10-25", "14:30")
+    storage.add("時刻なし", "", "2026-10-26")
+
+    res = client.get("/calendar")
+    html = res.get_data(as_text=True)
+    assert res.status_code == 200
+    assert 'id="calendar"' in html
+    assert "fullcalendar" in html
+
+    events = {e["title"]: e for e in calendar_events_from(html)}
+    assert events["時刻つき"]["start"] == "2026-10-25T14:30:00"
+    assert events["時刻つき"]["allDay"] is False
+    assert events["時刻なし"]["start"] == "2026-10-26"
+    assert events["時刻なし"]["allDay"] is True
+
+
+def test_calendar_event_links_to_edit(client, storage):
+    todo = storage.add("やること", "", "2026-10-25")
+
+    [event] = calendar_events_from(client.get("/calendar").get_data(as_text=True))
+    assert event["url"] == f"/edit/{todo['id']}?next=calendar"
+
+
+def test_calendar_shows_status(client, storage):
+    storage.add("期限切れ", "", days_from_today(-1))
+    storage.add("これから", "", days_from_today(1))
+    done = storage.add("完了", "", days_from_today(-1))
+    storage.toggle(done["id"])
+
+    events = {e["title"]: e for e in calendar_events_from(client.get("/calendar").get_data(as_text=True))}
+    assert events["期限切れ"]["classNames"] == ["todo-event-overdue"]
+    assert events["これから"]["classNames"] == ["todo-event-active"]
+    assert events["完了"]["classNames"] == ["todo-event-done"]  # 完了済みは期限切れにしない
+
+
+def test_calendar_shows_counts_in_tabs(client, storage):
+    storage.add("1件目", "", "2026-10-25")
+    done = storage.add("終わったこと", "", "2026-10-25")
+    storage.toggle(done["id"])
+
+    html = client.get("/calendar").get_data(as_text=True)
+    assert 'text-bg-primary">1</span>' in html
+    assert 'text-bg-secondary">1</span>' in html
+    assert 'class="nav-link active" href="/calendar"' in html
+
+
+def test_calendar_escapes_title(client, storage):
+    storage.add("</script><script>alert(1)</script>", "", "2026-10-25")
+
+    html = client.get("/calendar").get_data(as_text=True)
+    assert "<script>alert(1)" not in html
+    [event] = calendar_events_from(html)
+    assert event["title"] == "</script><script>alert(1)</script>"
+
+
+def test_edit_from_calendar_returns_there(client, storage):
+    todo = storage.add("やること", "", "2026-10-25")
+
+    html = client.get(f"/edit/{todo['id']}?next=calendar").get_data(as_text=True)
+    assert 'href="/calendar"' in html  # キャンセルでカレンダーに戻る
+
+    res = client.post(f"/edit/{todo['id']}?next=calendar", data=valid_data(title="直したこと"), follow_redirects=True)
+    assert res.request.path == "/calendar"
+    assert "更新しました" in res.get_data(as_text=True)
+
+
+def test_unknown_next_goes_to_index(client, storage):
+    todo = storage.add("やること", "", "2026-10-25")
+
+    res = client.post(f"/edit/{todo['id']}?next=https://example.com", data=valid_data())
+    assert res.headers["Location"] == "/"
