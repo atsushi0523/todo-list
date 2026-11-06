@@ -17,6 +17,7 @@
 - カレンダー表示（月表示とリスト表示。予定を押すと編集ページを開く。スマートフォンでは最初にリスト表示）
 - 削除（確認ダイアログあり）
 - LINEで確認・完了（LINEで「一覧」「今日」と送ると、未完了のやることが「完了」ボタンつきで届く。ボタンを押すと完了になる）
+- 期日前のLINE通知（時刻つきのやることを、期日の1時間前と30分前にLINEで知らせる。同じタイミングのものは1通にまとめる）
 - 入力チェック（タイトル必須・100文字以内、内容1000文字以内、期日必須・正しい日付、時刻は任意・正しい時刻）
 - スマートフォン対応
 
@@ -38,15 +39,18 @@
 ```
 [ブラウザ] ──HTTP──────▶ [Flaskアプリ（Vercel）] ──Sheets API──▶ [Googleスプレッドシート]
                                  ▲   │
-[LINE] ──Webhook（署名つき）─────┘   └──返信──▶ [LINE]
+[LINE] ──Webhook（署名つき）─────┘   └──返信・通知──▶ [LINE]
+                                 ▲
+[cron-job.org] ──5分おき（合言葉つき）── /tasks/remind
 ```
 
 | ファイル | 役割 |
 | --- | --- |
 | `app.py` | ルーティング、エラー処理、LINEのWebhookの受け取り |
 | `todos.py` | 並び替え・期限切れの判定など（WebとLINEで共通） |
-| `line_api.py` | LINEとの通信（署名の確認、返信の送信） |
-| `line_bot.py` | LINEの返事の組み立て（一覧・今日・完了ボタン） |
+| `line_api.py` | LINEとの通信（署名の確認、返信と通知の送信） |
+| `line_bot.py` | LINEの返事と通知の組み立て（一覧・今日・完了ボタン・期日前の通知） |
+| `reminders.py` | 期日前の通知で、いま送るべきものを選ぶ |
 | `sheets.py` | 保存先の処理（`MemoryStorage` と `SheetsStorage`） |
 | `forms.py` | フォームの定義と入力チェック |
 | `templates/` | 一覧・カレンダー・フォーム・エラーのHTML |
@@ -102,7 +106,7 @@ SPREADSHEET_ID=<スプレッドシートのURLの /d/ と /edit のあいだの�
 GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 ```
 
-1行目の見出し（`id, title, content, due_date, done, created_at, updated_at, due_time`）は、シートが空なら自動で書き込みます。列が足りない古い見出しの場合は、自動で今の列まで延ばします（データの行はそのまま使えます）。
+1行目の見出し（`id, title, content, due_date, done, created_at, updated_at, due_time, user_id, notified_60, notified_30`）は、シートが空なら自動で書き込みます。列が足りない古い見出しの場合は、自動で今の列まで延ばします（データの行はそのまま使えます）。
 
 > 鍵ファイルと `.env` は `.gitignore` で除外しているので、GitHubには上がりません。
 
@@ -144,6 +148,22 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 
 > LINEのWebhookはインターネットから届くので、ローカル（127.0.0.1）では受け取れません。動きはテストで確かめ、実際のやり取りはデプロイしてから試します。
 
+### 期日前の通知（L-06）
+
+時刻つきのやることを、期日の1時間前と30分前にLINEで知らせます。Vercelの無料プランでは決まった処理を自動で動かせるのが1日1回までなので、外部の [cron-job.org](https://cron-job.org/)（無料）から `/tasks/remind` を5分おきに呼び出します。
+
+1. 長いランダムな文字列を作り（`python -c "import secrets; print(secrets.token_urlsafe(32))"`）、Vercelの環境変数 `CRON_SECRET` に設定して再デプロイする
+2. cron-job.org でアカウントを作り、「CREATE CRONJOB」で次のように設定する
+   - URL：`https://<デプロイ先のドメイン>/tasks/remind`
+   - 実行間隔：Every 5 minutes
+   - 「ADVANCED」タブ：Request method を **POST**、Headers に `Authorization` ＝ `Bearer <CRON_SECRET の値>` を追加
+3. 「TEST RUN」を押して、`{"sent": 0}` などが返れば準備完了
+
+- 通知は最大5分遅れることがあります。30分を切ってから登録したものには、30分前の通知だけを送ります
+- 完了済み・時刻なしのやることには送りません。期日や時刻を編集すると、通知をもう一度送れるようになります
+- 送ったかどうかはスプレッドシートの J列（`notified_60`）・K列（`notified_30`）に記録します
+- LINEの無料プランで送れる通知は月200通までです（返信は数えられません）
+
 ## 工夫した点
 
 - **行番号ではなくidで特定する**：削除で行番号がずれても、編集・削除の対象を取り違えないように、UUIDで行を探す
@@ -160,7 +180,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 
 ## 今後の予定
 
-- LINEへの通知（期日の1時間前・30分前、毎朝の進捗）
+- 毎朝の進捗通知と、通知の設定ページ（L-07・L-08）
 - LINEの中での登録・編集（LIFF）
 - ログインとユーザーごとのリスト（LINEログインを検討中）
 

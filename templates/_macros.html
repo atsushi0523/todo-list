@@ -1,57 +1,129 @@
 {# 一覧ページ・完了済みページ・カレンダーで使い回す部品 #}
 
-{% macro tabs(page, active_count, done_count) %}
-<ul class="nav nav-tabs mb-3">
-  <li class="nav-item">
-    <a class="nav-link{% if page == 'index' %} active{% endif %}" href="{{ url_for('index') }}">
-      やること <span class="badge rounded-pill text-bg-primary">{{ active_count }}</span>
-    </a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link{% if page == 'done' %} active{% endif %}" href="{{ url_for('done_list') }}">
-      完了済み <span class="badge rounded-pill text-bg-secondary">{{ done_count }}</span>
-    </a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link{% if page == 'calendar' %} active{% endif %}" href="{{ url_for('calendar') }}">カレンダー</a>
-  </li>
-</ul>
+{# 小さな線のアイコン（SF Symbols 風）。色は文字の色（currentColor）を使う #}
+{% macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  {%- if name == 'list' %}<circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/><path d="M9 6h11M9 12h11M9 18h11"/>
+  {%- elif name == 'check' %}<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16.5 9.5"/>
+  {%- elif name == 'calendar' %}<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>
+  {%- elif name == 'today' %}<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>
+  {%- elif name == 'alert' %}<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><circle cx="12" cy="16.5" r="0.6" fill="currentColor"/>
+  {%- elif name == 'clock' %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>
+  {%- elif name == 'trash' %}<path d="M4 7h16M10 3.5h4M6 7l1 12.5a2 2 0 0 0 2 1.8h6a2 2 0 0 0 2-1.8L18 7M10 11v6M14 11v6"/>
+  {%- elif name == 'plus' %}<path d="M12 5v14M5 12h14"/>
+  {%- endif -%}
+</svg>
+{%- endmacro %}
+
+{% macro tabs(page, active_count, done_count, subtitle=None) %}
+<header class="page-header">
+  {% if subtitle %}<p class="page-subtitle">{{ subtitle }}</p>{% endif %}
+  <h1 class="large-title">
+    {%- if page == 'done' %}完了済み{% elif page == 'calendar' %}カレンダー{% else %}やること{% endif -%}
+  </h1>
+</header>
+<nav class="segmented" aria-label="表示の切り替え">
+  <a class="segment{% if page == 'index' %} active{% endif %}" href="{{ url_for('index') }}"
+     {%- if page == 'index' %} aria-current="page"{% endif %}>
+    やること <span class="segment-count">{{ active_count }}</span>
+  </a>
+  <a class="segment{% if page == 'done' %} active{% endif %}" href="{{ url_for('done_list') }}"
+     {%- if page == 'done' %} aria-current="page"{% endif %}>
+    完了済み <span class="segment-count">{{ done_count }}</span>
+  </a>
+  <a class="segment{% if page == 'calendar' %} active{% endif %}" href="{{ url_for('calendar') }}"
+     {%- if page == 'calendar' %} aria-current="page"{% endif %}>カレンダー</a>
+</nav>
+{% endmacro %}
+
+{# 一覧ページの上の4つのタイル（リマインダーのスマートリスト風）。押すとその区切りへ移る #}
+{% macro summary_tiles(counts, done_count) %}
+<div class="tiles">
+  <a class="tile tile-today" href="#section-today">
+    <span class="tile-icon">{{ icon('today') }}</span>
+    <span class="tile-count">{{ counts.get('today', 0) }}</span>
+    <div class="tile-label">今日</div>
+  </a>
+  <a class="tile tile-overdue" href="#section-overdue">
+    <span class="tile-icon">{{ icon('alert') }}</span>
+    <span class="tile-count">{{ counts.get('overdue', 0) }}</span>
+    <div class="tile-label">期限切れ</div>
+  </a>
+  <a class="tile tile-later" href="#section-{{ 'tomorrow' if counts.get('tomorrow') else 'later' }}">
+    <span class="tile-icon">{{ icon('clock') }}</span>
+    <span class="tile-count">{{ counts.get('tomorrow', 0) + counts.get('later', 0) }}</span>
+    <div class="tile-label">明日以降</div>
+  </a>
+  <a class="tile tile-done" href="{{ url_for('done_list') }}">
+    <span class="tile-icon">{{ icon('check') }}</span>
+    <span class="tile-count">{{ done_count }}</span>
+    <div class="tile-label">完了済み</div>
+  </a>
+</div>
 {% endmacro %}
 
 {% macro todo_list(todos, page) %}
-<ul class="list-group shadow-sm">
+<ul class="ios-list">
   {% for todo in todos %}
-  <li class="list-group-item d-flex gap-3 align-items-start todo-item{% if todo.done %} todo-done{% elif todo.overdue %} todo-overdue{% endif %}">
-    <form method="post" action="{{ url_for('toggle', todo_id=todo.id) }}" class="pt-1">
+  <li class="ios-row todo-item{% if todo.done %} todo-done{% elif todo.overdue %} todo-overdue{% endif %}">
+    <form method="post" action="{{ url_for('toggle', todo_id=todo.id) }}" class="ios-row-check">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ page }}">
-      <input class="form-check-input js-auto-submit" type="checkbox" {% if todo.done %}checked{% endif %}
-             aria-label="「{{ todo.title }}」を{% if todo.done %}未完了に戻す{% else %}完了にする{% endif %}">
-      <noscript><button class="btn btn-sm btn-outline-secondary mt-1">切替</button></noscript>
+      {# 丸は小さいままにして、押せる範囲だけを指で押しやすい大きさ（44px）に広げる #}
+      <label class="check-hit">
+        <input class="ios-check js-auto-submit" type="checkbox" {% if todo.done %}checked{% endif %}
+               aria-label="「{{ todo.title }}」を{% if todo.done %}未完了に戻す{% else %}完了にする{% endif %}">
+      </label>
+      <noscript><button class="text-btn">切替</button></noscript>
     </form>
 
-    <div class="flex-grow-1 min-w-0">
-      <div class="fw-semibold todo-title">{{ todo.title }}</div>
+    {# 行を押すと編集できる（iOSの一覧と同じ） #}
+    <a class="ios-row-body todo-link" href="{{ url_for('edit', todo_id=todo.id, next=page) }}"
+       title="編集する">
+      <div class="todo-title">{{ todo.title }}</div>
       {% if todo.content %}
-      <div class="small text-body-secondary todo-content">{{ todo.content | truncate(60, true) }}</div>
+      <div class="todo-content">{{ todo.content | truncate(60, true) }}</div>
       {% endif %}
-      <div class="small mt-1 todo-due">
-        期日：{{ todo.due_date }}{% if todo.due_time %} {{ todo.due_time }}{% endif %}
-        {% if todo.overdue %}<span class="badge text-bg-danger ms-1">期限切れ</span>{% endif %}
-        {% if todo.done %}<span class="ms-2">完了：{{ todo.updated_at[:16] }}</span>{% endif %}
+      <div class="todo-due">
+        {{ due_text(todo) }}
+        {% if todo.overdue %}<span class="due-badge">期限切れ</span>{% endif %}
+        {% if todo.done %}<span class="todo-done-at">・完了 {{ todo.updated_at[5:16] | replace('-', '/') }}</span>{% endif %}
       </div>
-    </div>
+    </a>
 
-    <div class="d-flex gap-1 flex-shrink-0">
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('edit', todo_id=todo.id, next=page) }}">編集</a>
-      <form method="post" action="{{ url_for('delete', todo_id=todo.id) }}"
-            data-confirm="「{{ todo.title }}」を削除しますか？">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="next" value="{{ page }}">
-        <button class="btn btn-sm btn-outline-danger">削除</button>
-      </form>
-    </div>
+    <form method="post" action="{{ url_for('delete', todo_id=todo.id) }}" class="ios-row-actions"
+          data-confirm="「{{ todo.title }}」を削除しますか？">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ page }}">
+      <button class="icon-btn icon-btn-danger" aria-label="「{{ todo.title }}」を削除" title="削除">
+        {{ icon('trash') }}
+      </button>
+    </form>
   </li>
   {% endfor %}
 </ul>
+{% endmacro %}
+
+{% macro empty_state(message, link_url, link_text) %}
+<div class="empty-state">
+  <div class="empty-state-icon" aria-hidden="true">{{ icon('check') }}</div>
+  <p>{{ message }}</p>
+  <a class="pill-btn" href="{{ link_url }}">{{ link_text }}</a>
+</div>
+{% endmacro %}
+
+{# スマートフォンの画面の下に浮かぶ、すりガラスのタブバーと「＋」ボタン #}
+{% macro tab_bar(page) %}
+<nav class="tab-bar d-sm-none" aria-label="ページの切り替え">
+  <div class="tab-bar-glass">
+    <a class="tab-item{% if page == 'index' %} is-current{% endif %}" href="{{ url_for('index') }}"
+       {%- if page == 'index' %} aria-current="page"{% endif %}>{{ icon('list') }}<span>やること</span></a>
+    <a class="tab-item{% if page == 'done' %} is-current{% endif %}" href="{{ url_for('done_list') }}"
+       {%- if page == 'done' %} aria-current="page"{% endif %}>{{ icon('check') }}<span>完了済み</span></a>
+    <a class="tab-item{% if page == 'calendar' %} is-current{% endif %}" href="{{ url_for('calendar') }}"
+       {%- if page == 'calendar' %} aria-current="page"{% endif %}>{{ icon('calendar') }}<span>カレンダー</span></a>
+  </div>
+  <a class="tab-bar-add" href="{{ url_for('new') }}" aria-label="新規登録">{{ icon('plus') }}</a>
+</nav>
 {% endmacro %}

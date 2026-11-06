@@ -1,15 +1,22 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tabs, todo_list with context %}
+{% from "_macros.html" import tabs, todo_list, empty_state, summary_tiles with context %}
 
 {% block content %}
-{{ tabs(page, active_count, done_count) }}
+{{ tabs(page, active_count, done_count, subtitle=today) }}
+
+{# やることが0件でも、完了した数などが見えるようにタイルは出しておく #}
+{{ summary_tiles(counts, done_count) }}
 
 {% if todos %}
-{{ todo_list(todos, page) }}
+{% for section in sections %}
+<section class="todo-section" id="section-{{ section.key }}">
+  <h2 class="section-title section-{{ section.key }}">
+    {{ section.label }}<span class="section-count">{{ section.todos | length }}</span>
+  </h2>
+  {{ todo_list(section.todos, page) }}
+</section>
+{% endfor %}
 {% else %}
-<div class="card card-body text-center py-5 shadow-sm">
-  <p class="text-body-secondary mb-3">やることはまだありません</p>
-  <div><a class="btn btn-primary" href="{{ url_for('new') }}">やることを登録する</a></div>
-</div>
+{{ empty_state("やることはまだありません", url_for('new'), "やることを登録する") }}
 {% endif %}
 {% endblock %}

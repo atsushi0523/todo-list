@@ -1,22 +1,29 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tabs %}
+{% from "_macros.html" import tabs, icon %}
 
 {% block title %}カレンダー | Todoリスト{% endblock %}
 
 {% block content %}
 {{ tabs(page, active_count, done_count) }}
 
-<div class="card card-body shadow-sm">
-  <div id="calendar"></div>
-  <noscript><p class="text-body-secondary mb-0">カレンダーを表示するには JavaScript を有効にしてください。</p></noscript>
+<div class="ios-card calendar-card">
+  <div id="calendar" data-new-url="{{ url_for('new') }}"></div>
+  <noscript><p class="list-caption mb-0">カレンダーを表示するには JavaScript を有効にしてください。</p></noscript>
 </div>
 
-<p class="small text-body-secondary mt-2 mb-0 calendar-legend">
-  <span class="legend-dot" style="background-color: #0d6efd"></span>未完了
-  <span class="legend-dot ms-3" style="background-color: #dc3545"></span>期限切れ
-  <span class="legend-dot ms-3" style="background-color: #6c757d"></span>完了済み
-  <span class="ms-3">（押すと編集できます）</span>
+<p class="list-caption calendar-legend">
+  <span><span class="legend-dot legend-active"></span>未完了</span>
+  <span><span class="legend-dot legend-overdue"></span>期限切れ</span>
+  <span><span class="legend-dot legend-done"></span>完了済み</span>
+  <span class="calendar-hint d-none d-sm-inline">日付を押すと、その日のやることを登録できます</span>
 </p>
+
+{# スマートフォンの月表示で、選んだ日のやることを出す場所（calendar.js が中身を作る） #}
+<section id="day-panel" class="day-panel" hidden>
+  <h2 class="section-header" id="day-panel-title"></h2>
+  <ul class="ios-list" id="day-panel-list"></ul>
+  <a class="day-panel-add" id="day-panel-add" href="#"><span class="plus-circle" aria-hidden="true">{{ icon('plus') }}</span>この日にやることを追加</a>
+</section>
 
 {# 予定のデータ。tojson が < や > をエスケープするので、タイトルに </script> があっても安全 #}
 <script type="application/json" id="calendar-events">{{ events | tojson }}</script>

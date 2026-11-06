@@ -1,11 +1,9 @@
 {% extends "base.html" %}
+{% from "_macros.html" import empty_state %}
 
 {% block title %}エラー | Todoリスト{% endblock %}
 
 {% block content %}
-<div class="card card-body text-center py-5 shadow-sm">
-  <h1 class="h4">エラーが発生しました</h1>
-  <p class="text-body-secondary">{{ message }}</p>
-  <div><a class="btn btn-primary" href="{{ url_for('index') }}">一覧に戻る</a></div>
-</div>
+<h1 class="large-title">エラーが発生しました</h1>
+{{ empty_state(message, url_for('index'), "一覧に戻る") }}
 {% endblock %}

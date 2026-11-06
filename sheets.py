@@ -16,10 +16,21 @@ from datetime import datetime, timedelta, timezone
 # サーバーの時刻設定に左右されないよう、日本時間を固定で使う
 JST = timezone(timedelta(hours=9), "JST")
 
-# スプレッドシートの列の並び（A列〜H列）。今あるデータを壊さないよう、新しい列は必ず末尾に足す
-FIELDS = ["id", "title", "content", "due_date", "done", "created_at", "updated_at", "due_time"]
+# スプレッドシートの列の並び（A列〜K列）。今あるデータを壊さないよう、新しい列は必ず末尾に足す
+# user_id: 持ち主のLINEユーザーID（当面は空＝自分）
+# notified_60 / notified_30: 期日の1時間前・30分前の通知を送ったか
+FIELDS = [
+    "id", "title", "content", "due_date", "done", "created_at", "updated_at", "due_time",
+    "user_id", "notified_60", "notified_30",
+]
 
-# 最後の列の記号（H）。FIELDS が26列を超えることは想定しない
+# TRUE / FALSE で保存する列
+BOOL_FIELDS = {"done", "notified_60", "notified_30"}
+
+# 通知の種類（何分前か）と、送ったことを記録する列
+NOTIFY_FIELDS = {60: "notified_60", 30: "notified_30"}
+
+# 最後の列の記号（K）。FIELDS が26列を超えることは想定しない
 LAST_COLUMN = chr(ord("A") + len(FIELDS) - 1)
 
 
@@ -46,7 +57,25 @@ def _new_todo(title, content, due_date, due_time=""):
         "created_at": now,
         "updated_at": now,
         "due_time": due_time,
+        "user_id": "",
+        "notified_60": False,
+        "notified_30": False,
     }
+
+
+def _apply_update(todo, title, content, due_date, due_time):
+    """編集の内容を反映する。期日か時刻が変わったら、通知を送った記録を消して送り直せるようにする"""
+    if (todo["due_date"], todo.get("due_time", "")) != (due_date, due_time):
+        todo.update(notified_60=False, notified_30=False)
+    todo.update(title=title, content=content, due_date=due_date, due_time=due_time, updated_at=_timestamp())
+
+
+def _apply_notified(todo, minutes):
+    """通知を送ったことを記録する。30分前を送ったら、1時間前はもう送らない。
+    完了済みページの並び（更新日時順）が変わらないよう、updated_at は変えない"""
+    todo[NOTIFY_FIELDS[minutes]] = True
+    if minutes == 30:
+        todo["notified_60"] = True
 
 
 class MemoryStorage:
@@ -71,7 +100,14 @@ class MemoryStorage:
         todo = self._todos.get(todo_id)
         if todo is None:
             return False
-        todo.update(title=title, content=content, due_date=due_date, due_time=due_time, updated_at=_timestamp())
+        _apply_update(todo, title, content, due_date, due_time)
+        return True
+
+    def mark_notified(self, todo_id, minutes):
+        todo = self._todos.get(todo_id)
+        if todo is None:
+            return False
+        _apply_notified(todo, minutes)
         return True
 
     def delete(self, todo_id):
@@ -103,12 +139,13 @@ def _wrap_errors(method):
 def _row_to_todo(row):
     row = list(row) + [""] * (len(FIELDS) - len(row))
     todo = dict(zip(FIELDS, row))
-    todo["done"] = str(todo["done"]).upper() == "TRUE"
+    for field in BOOL_FIELDS:
+        todo[field] = str(todo[field]).upper() == "TRUE"
     return todo
 
 
 def _todo_to_row(todo):
-    return [("TRUE" if todo["done"] else "FALSE") if field == "done" else todo[field] for field in FIELDS]
+    return [("TRUE" if todo[field] else "FALSE") if field in BOOL_FIELDS else todo[field] for field in FIELDS]
 
 
 class SheetsStorage:
@@ -166,7 +203,17 @@ class SheetsStorage:
         if row is None:
             return False
         todo = _row_to_todo(self._ws().row_values(row))
-        todo.update(title=title, content=content, due_date=due_date, due_time=due_time, updated_at=_timestamp())
+        _apply_update(todo, title, content, due_date, due_time)
+        self._write_row(row, todo)
+        return True
+
+    @_wrap_errors
+    def mark_notified(self, todo_id, minutes):
+        row = self._find_row(todo_id)
+        if row is None:
+            return False
+        todo = _row_to_todo(self._ws().row_values(row))
+        _apply_notified(todo, minutes)
         self._write_row(row, todo)
         return True
 

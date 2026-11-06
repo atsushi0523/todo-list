@@ -47,9 +47,9 @@ def done_postback_data(todo_id):
     return urlencode({"action": "done", "id": todo_id})
 
 
-def _todo_row(todo, now):
+def _todo_row(todo, now, note=""):
     overdue = is_overdue(todo, now)
-    label = due_label(todo, now) + ("　期限切れ" if overdue else "")
+    label = due_label(todo, now) + ("　期限切れ" if overdue else "") + note
     return {
         "type": "box",
         "layout": "horizontal",
@@ -77,14 +77,16 @@ def _todo_row(todo, now):
     }
 
 
-def todo_list_message(heading, todos, now, web_url):
-    """やることを1件ずつ「完了」ボタンつきで並べたカード（Flex Message）を作る"""
+def todo_list_message(heading, todos, now, web_url, notes=None):
+    """やることを1件ずつ「完了」ボタンつきで並べたカード（Flex Message）を作る。
+    notes は {id: 期日の後ろに添える文字}（通知の「あと25分」など）"""
+    notes = notes or {}
     shown = todos[:MAX_ITEMS]
     rows = []
     for todo in shown:
         if rows:
             rows.append({"type": "separator"})
-        rows.append(_todo_row(todo, now))
+        rows.append(_todo_row(todo, now, notes.get(todo["id"], "")))
     if len(todos) > len(shown):
         rows.append(
             {"type": "text", "text": f"ほか{len(todos) - len(shown)}件はWebで確認できます", "size": "xs", "color": COLOR_MUTED}
@@ -159,3 +161,21 @@ def handle_event(event, storage, now, web_url):
     if messages:
         messages[-1]["quickReply"] = quick_reply()
     return messages
+
+
+def time_left_text(minutes):
+    """残り時間の表記（例：あと25分、あと1時間）"""
+    return "あと1時間" if minutes >= 60 else f"あと{minutes}分"
+
+
+def reminder_message(reminders, now, web_url):
+    """期日前の通知。同じタイミングのものは1通のカードにまとめる。
+    reminders は reminders.due_reminders() が返すもの"""
+    todos = [r.todo for r in reminders]
+    notes = {r.todo["id"]: f"（{time_left_text(r.minutes_left)}）" for r in reminders}
+    message = todo_list_message("⏰ もうすぐ期限です", todos, now, web_url, notes)
+    first = reminders[0]
+    others = f" ほか{len(reminders) - 1}件" if len(reminders) > 1 else ""
+    # 通知やトーク一覧に出る文。ここだけで内容がわかるようにする
+    message["altText"] = f"⏰「{first.todo['title']}」の期限まで{time_left_text(first.minutes_left)[2:]}です{others}"
+    return message

@@ -1,52 +1,760 @@
-.app-container {
-  max-width: 800px;
+/*
+  Appleのアプリ（リマインダーなど）の雰囲気に寄せた見た目。
+  色はすべてここの変数にまとめ、ダークモードでは値だけを切り替える。
+*/
+:root {
+  --ios-bg: #f2f2f7;
+  --ios-card: #ffffff;
+  --ios-label: #000000;
+  --ios-secondary: rgba(60, 60, 67, 0.6);
+  --ios-tertiary: rgba(60, 60, 67, 0.3);
+  --ios-separator: rgba(60, 60, 67, 0.18);
+  --ios-fill: rgba(118, 118, 128, 0.12);
+  --ios-blue: #007aff;
+  --ios-red: #ff3b30;
+  --ios-green: #34c759;
+  --ios-gray: #8e8e93;
+  --ios-bar: rgba(242, 242, 247, 0.8);
+  --ios-segment-active: #ffffff;
+  --ios-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --ios-radius: 16px;
+  /* 動きの基準。跳ね返りのない「ばね」に近いカーブ（押したときは速く、戻るときは柔らかく） */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --press-in: transform 0.08s ease-out, background-color 0.08s ease-out;
+  --press-out: transform 0.35s var(--ease-spring), background-color 0.25s ease;
+  --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Segoe UI", "Yu Gothic UI", Meiryo, system-ui, sans-serif;
 }
 
-.min-w-0 {
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ios-bg: #000000;
+    --ios-card: #1c1c1e;
+    --ios-label: #ffffff;
+    --ios-secondary: rgba(235, 235, 245, 0.6);
+    --ios-tertiary: rgba(235, 235, 245, 0.3);
+    --ios-separator: rgba(84, 84, 88, 0.6);
+    --ios-fill: rgba(118, 118, 128, 0.24);
+    --ios-blue: #0a84ff;
+    --ios-red: #ff453a;
+    --ios-green: #30d158;
+    --ios-gray: #8e8e93;
+    --ios-bar: rgba(22, 22, 24, 0.8);
+    --ios-segment-active: #636366;
+    --ios-shadow: none;
+  }
+}
+
+/* --- 全体 --- */
+
+body {
+  background-color: var(--ios-bg);
+  color: var(--ios-label);
+  font-family: var(--ios-font);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* スマートフォンで、押したときの灰色の四角と、ダブルタップの待ち時間をなくす */
+a,
+button,
+input,
+label,
+.fc-daygrid-day {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.app-container {
+  max-width: 760px;
+}
+
+.app-main {
+  padding-top: 0.5rem;
+  /* スマートフォンの下のバーに隠れないよう、余白をとる */
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 576px) {
+  .app-main {
+    padding-bottom: 4rem;
+  }
+}
+
+a {
+  color: var(--ios-blue);
+}
+
+/* --- 上のバー（すりガラス風。スクロールしても上に残る） --- */
+
+.app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1020;
+  background-color: var(--ios-bar);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  /* 一番上では境目の線を出さず、内容がもぐったときだけ出す（app.js が .is-scrolled をつける） */
+  border-bottom: 0.5px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.app-bar.is-scrolled {
+  border-bottom-color: var(--ios-separator);
+}
+
+.app-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+}
+
+.app-bar-brand {
+  color: var(--ios-label);
+  font-weight: 600;
+  font-size: 1.0625rem;
+  font-feature-settings: "palt";
+  text-decoration: none;
+  /* 一番上では大きな見出しがあるので隠し、スクロールして見出しが隠れたらバーに出す（iOSと同じ） */
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.35s var(--ease-spring);
+}
+
+.app-bar.is-scrolled .app-bar-brand {
+  opacity: 1;
+  transform: none;
+}
+
+.app-bar-add,
+.bottom-bar-add {
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ios-blue);
+  font-weight: 600;
+  text-decoration: none;
+  min-height: 44px;
+  transition: opacity 0.25s ease;
+}
+
+.app-bar-add:active,
+.bottom-bar-add:active,
+.day-panel-add:active {
+  opacity: 0.4;
+  transition: opacity 0.05s;
+}
+
+.plus-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background-color: var(--ios-blue);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* --- 下のバー（スマートフォンだけ） --- */
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1020;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  background-color: var(--ios-bar);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--ios-separator);
+}
+
+.bottom-bar-add {
+  display: inline-flex;
+  font-size: 1.0625rem;
+}
+
+/* --- 大きな見出しと切り替えボタン --- */
+
+/* 大きな文字は行間を詰め、字間も詰める（日本語はプロポーショナル詰め palt を使う） */
+.large-title {
+  margin: 1rem 0;
+  font-size: clamp(1.875rem, 1.6rem + 1.2vw, 2.125rem);
+  font-weight: 700;
+  font-feature-settings: "palt";
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  margin-bottom: 1.5rem;
+  border-radius: 9px;
+  background-color: var(--ios-fill);
+}
+
+.segment {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 7px;
+  color: var(--ios-label);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--press-out);
+}
+
+.segment:not(.active):active {
+  transform: scale(0.96);
+  transition: var(--press-in);
+}
+
+.segment.active {
+  background-color: var(--ios-segment-active);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+  font-weight: 600;
+}
+
+.segment-count {
+  color: var(--ios-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 角の丸いグループの一覧 --- */
+
+.ios-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: var(--ios-shadow);
+}
+
+.ios-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0.75rem 1rem;
+  transition: opacity 0.3s ease, background-color 0.25s ease;
+}
+
+/* 行の区切り線は、iOSと同じく文字の左端から引く */
+.ios-row + .ios-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 3.25rem;
+  border-top: 0.5px solid var(--ios-separator);
+}
+
+.ios-row-check {
+  padding-top: 0.05rem;
+}
+
+/* チェックの丸は24pxのまま、押せる範囲を上下左右に広げて44pxにする */
+.check-hit {
+  display: block;
+  margin: -0.625rem;
+  padding: 0.625rem;
+  cursor: pointer;
+}
+
+.ios-row-body {
+  flex: 1;
   min-width: 0;
 }
 
-.todo-title,
-.todo-content {
+.ios-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.todo-title {
+  font-size: 1.0625rem;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
 .todo-content {
+  margin-top: 0.15rem;
+  color: var(--ios-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.45;
   white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
-.todo-item .form-check-input {
-  width: 1.3em;
-  height: 1.3em;
-  cursor: pointer;
+.todo-due {
+  margin-top: 0.25rem;
+  color: var(--ios-secondary);
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 完了済み：取り消し線とグレー表示 */
-.todo-done {
-  background-color: var(--bs-tertiary-bg);
-  color: var(--bs-secondary-color);
+/* 期限切れ：期日を赤字にし、小さなラベルをつける */
+.todo-overdue .todo-due {
+  color: var(--ios-red);
 }
 
+.due-badge {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  background-color: var(--ios-red);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 0.05em;
+}
+
+/* 完了済み：グレーにして取り消し線 */
 .todo-done .todo-title {
+  color: var(--ios-secondary);
   text-decoration: line-through;
 }
 
-/* 期限切れ：左の赤線と赤字の期日 */
-.todo-overdue {
-  box-shadow: inset 4px 0 0 var(--bs-danger);
+/* --- 丸いチェック --- */
+
+.ios-check {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  border: 1.5px solid var(--ios-tertiary);
+  border-radius: 50%;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.35s var(--ease-spring);
 }
 
-.todo-overdue .todo-due {
-  color: var(--bs-danger);
+@media (hover: hover) {
+  .ios-check:hover {
+    border-color: var(--ios-blue);
+  }
+}
+
+/* 押している間は少し縮み、離すと柔らかく戻る */
+.check-hit:active .ios-check {
+  transform: scale(0.86);
+  transition: transform 0.08s ease-out;
+}
+
+.ios-check:checked {
+  border-color: var(--ios-blue);
+  background-color: var(--ios-blue);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3e%3cpath fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='M5.5 10.5l3 3 6-7'/%3e%3c/svg%3e");
+  background-position: center;
+  background-size: 100%;
+}
+
+.ios-check:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ios-blue) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* --- ボタン --- */
+
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ios-blue);
+  font-size: 0.9375rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--press-out);
+}
+
+@media (hover: hover) {
+  .text-btn:hover {
+    background-color: var(--ios-fill);
+  }
+}
+
+.text-btn:active {
+  background-color: var(--ios-fill);
+  transform: scale(0.95);
+  transition: var(--press-in);
+}
+
+/* 指で操作する端末では、ボタンを44pxの高さにする（見た目の位置は変えず、押せる範囲を広げる） */
+@media (pointer: coarse) {
+  .text-btn {
+    min-height: 2.75rem;
+    padding: 0.25rem 0.625rem;
+  }
+
+  .icon-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+    margin: -0.5rem -0.625rem -0.5rem 0;
+  }
+}
+
+.text-btn-danger {
+  color: var(--ios-red);
+}
+
+.pill-btn {
+  display: inline-block;
+  padding: 0.55rem 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background-color: var(--ios-blue);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 0.15s, var(--press-out);
+}
+
+@media (hover: hover) {
+  .pill-btn:hover {
+    color: #fff;
+    filter: brightness(1.08);
+  }
+}
+
+.pill-btn:active {
+  color: #fff;
+  filter: brightness(0.92);
+  transform: scale(0.97);
+  transition: var(--press-in);
+}
+
+.pill-btn:focus-visible,
+.text-btn:focus-visible,
+.segment:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ios-blue) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.pill-btn-lg {
+  min-height: 3.125rem;
+  padding: 0.8rem 2rem;
+  font-size: 1.0625rem;
+}
+
+/* --- 空のとき --- */
+
+.empty-state {
+  padding: 3.5rem 1.5rem;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: var(--ios-shadow);
+  color: var(--ios-secondary);
+  text-align: center;
+}
+
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.75rem;
+  border-radius: 50%;
+  background-color: var(--ios-fill);
+  color: var(--ios-gray);
+  font-size: 1.75rem;
+}
+
+.empty-state p {
+  margin-bottom: 1.5rem;
+  font-size: 1.0625rem;
+}
+
+/* --- 小さな説明文・見出し --- */
+
+.list-caption {
+  margin: 0 1rem 0.5rem;
+  color: var(--ios-secondary);
+  font-size: 0.8125rem;
+}
+
+.section-header {
+  margin: 1.5rem 1rem 0.5rem;
+  color: var(--ios-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+/* --- 操作後のメッセージ --- */
+
+.toast-message {
+  margin: 0.5rem 0 1rem;
+  animation: toast-in 0.45s var(--ease-spring) both;
+  transform-origin: top center;
+  border: 0;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  color: var(--ios-label);
+}
+
+.toast-success {
+  box-shadow: inset 4px 0 0 var(--ios-green), 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.toast-warning {
+  box-shadow: inset 4px 0 0 #ff9f0a, 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* --- フォーム --- */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-height: 2.75rem;
+  margin: 0.25rem 0 -0.5rem -0.25rem;
+  padding: 0 0.25rem;
+  font-size: 1.0625rem;
+  text-decoration: none;
+  transition: opacity 0.25s ease;
+}
+
+.back-link:active {
+  opacity: 0.4;
+  transition: opacity 0.05s;
+}
+
+.back-link span {
+  font-size: 1.5rem;
+  line-height: 1;
+  vertical-align: -0.1em;
+}
+
+.ios-group {
+  margin-bottom: 1.25rem;
+  padding: 0.25rem 1rem;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: var(--ios-shadow);
+}
+
+.form-row-ios {
+  padding: 0.75rem 0;
+}
+
+.form-row-ios + .form-row-ios {
+  border-top: 0.5px solid var(--ios-separator);
+}
+
+@media (min-width: 576px) {
+  /* 期日と時刻はPCでは横に並べる */
+  .ios-group-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.5rem;
+  }
+
+  .ios-group-split .form-row-ios + .form-row-ios {
+    border-top: 0;
+  }
+}
+
+.form-label-ios {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ios-secondary);
+  font-size: 0.8125rem;
+}
+
+.required-mark {
+  margin-left: 0.4rem;
+  color: var(--ios-red);
+  font-size: 0.75rem;
+}
+
+.ios-input {
+  min-height: 2.75rem;
+  padding: 0.625rem 0.875rem;
+  border: 0;
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease;
+  background-color: var(--ios-fill);
+  color: var(--ios-label);
+  font-size: 1.0625rem;
+}
+
+.ios-input:focus {
+  background-color: var(--ios-fill);
+  color: var(--ios-label);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ios-blue) 35%, transparent);
+}
+
+.ios-input.is-invalid {
+  box-shadow: 0 0 0 1.5px var(--ios-red);
+}
+
+.form-hint {
+  margin-top: 0.35rem;
+  color: var(--ios-secondary);
+  font-size: 0.8125rem;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+@media (max-width: 575.98px) {
+  .form-actions .pill-btn {
+    width: 100%;
+  }
+
+  .form-actions {
+    gap: 0.5rem;
+  }
+
+  .form-actions .text-btn {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+}
+
+/* --- カレンダー --- */
+
+.ios-card {
+  padding: 1rem;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: var(--ios-shadow);
+}
+
+.calendar-card .fc {
+  --fc-border-color: var(--ios-separator);
+  --fc-page-bg-color: var(--ios-card);
+  --fc-neutral-bg-color: var(--ios-fill);
+  --fc-list-event-hover-bg-color: var(--ios-fill);
+  --fc-today-bg-color: transparent;
+  --fc-button-bg-color: var(--ios-fill);
+  --fc-button-border-color: transparent;
+  --fc-button-text-color: var(--ios-label);
+  --fc-button-hover-bg-color: var(--ios-tertiary);
+  --fc-button-hover-border-color: transparent;
+  --fc-button-active-bg-color: var(--ios-blue);
+  --fc-button-active-border-color: transparent;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.fc .fc-button {
+  padding: 0.3rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: none !important;
+  transition: var(--press-out);
+}
+
+.fc .fc-button:not(:disabled):active {
+  transform: scale(0.95);
+  transition: var(--press-in);
+}
+
+@media (pointer: coarse) {
+  .fc .fc-button {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  color: #fff;
+}
+
+.fc .fc-button-primary:disabled {
+  opacity: 0.4;
+}
+
+/* 枠線を減らし、すっきりさせる */
+.fc .fc-scrollgrid,
+.fc .fc-scrollgrid td,
+.fc .fc-scrollgrid th {
+  border-left: 0;
+  border-right: 0;
+}
+
+.fc .fc-scrollgrid {
+  border-top: 0;
+}
+
+.fc .fc-col-header-cell {
+  border: 0;
+}
+
+.fc .fc-col-header-cell-cushion {
+  color: var(--ios-secondary);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
-/* カレンダー */
-.fc .fc-toolbar-title {
-  font-size: 1.25rem;
+/* 日付や曜日のリンクに Bootstrap の下線と青色がつかないようにする */
+.fc a:not(.fc-event) {
+  color: inherit;
+  text-decoration: none;
+}
+
+.fc .fc-daygrid-day-number {
+  font-size: 0.875rem;
+}
+
+/* 今日の日付は、iOSと同じく赤い丸で示す */
+.fc .fc-day-today .fc-daygrid-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin: 0.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background-color: var(--ios-red);
+  color: #fff;
+  font-weight: 600;
 }
 
 .fc .fc-event {
+  border-radius: 5px;
   cursor: pointer;
 }
 
@@ -55,10 +763,43 @@
   text-decoration: line-through;
 }
 
+.calendar-legend {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  vertical-align: 0;
+}
+
+.legend-active {
+  background-color: #007aff;
+}
+
+.legend-overdue {
+  background-color: #ff3b30;
+}
+
+.legend-done {
+  background-color: #8e8e93;
+}
+
 @media (max-width: 575.98px) {
-  .fc .fc-toolbar {
+  .calendar-card {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .fc .fc-toolbar.fc-header-toolbar {
     flex-wrap: wrap;
     gap: 0.5rem;
+    margin-bottom: 0.75rem;
   }
 
   .fc .fc-toolbar-title {
@@ -66,17 +807,736 @@
   }
 }
 
-.legend-dot {
-  display: inline-block;
-  width: 0.75em;
-  height: 0.75em;
-  margin-right: 0.25em;
-  border-radius: 50%;
-  vertical-align: -0.05em;
+/*
+  スマートフォンの月表示：予定はタイトルではなく色の点で出し、
+  日付を押すと下にその日のやることを一覧で出す（calendar.js が .calendar-compact をつける）
+*/
+.calendar-compact .fc-daygrid-day-frame {
+  min-height: 3.25rem;
+  cursor: pointer;
 }
 
-/* 日付や曜日のリンクに Bootstrap の下線と青色がつかないようにする */
-.fc a:not(.fc-event) {
+.calendar-compact .fc-daygrid-day-top {
+  justify-content: center;
+}
+
+.calendar-compact .fc-daygrid-day-events {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  min-height: 0;
+  margin: 0 2px 4px !important;
+}
+
+.calendar-compact .fc-daygrid-event-harness {
+  margin: 0 !important;
+}
+
+.calendar-compact .fc-daygrid-event {
+  width: 6px;
+  height: 6px;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+}
+
+.calendar-compact .fc-daygrid-event * {
+  display: none;
+}
+
+.calendar-compact .fc-daygrid-day-bottom {
+  display: none;
+}
+
+.calendar-compact .fc-daygrid-day.is-selected .fc-daygrid-day-number {
+  border-radius: 999px;
+  background-color: var(--ios-label);
+  color: var(--ios-card);
+  font-weight: 600;
+}
+
+.calendar-compact .fc-daygrid-day.is-selected.fc-day-today .fc-daygrid-day-number {
+  background-color: var(--ios-red);
+  color: #fff;
+}
+
+.calendar-compact .fc-daygrid-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin: 0.15rem;
+}
+
+/* 選んだ日のやること */
+.day-panel .ios-row {
+  align-items: center;
+  color: var(--ios-label);
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .day-panel a.ios-row:hover {
+    background-color: var(--ios-fill);
+  }
+}
+
+/* 押した瞬間に行の色を変える（iOSの一覧と同じ） */
+.day-panel a.ios-row:active {
+  background-color: var(--ios-fill);
+  transition: none;
+}
+
+/* 行は li の中の a なので、区切り線は「前に li がある行」に引く */
+.day-panel li + li .ios-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 2.6rem;
+  border-top: 0.5px solid var(--ios-separator);
+}
+
+.day-dot {
+  flex-shrink: 0;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+}
+
+.day-time {
+  flex-shrink: 0;
+  color: var(--ios-secondary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-empty {
+  color: var(--ios-secondary);
+  justify-content: center;
+}
+
+.day-chevron {
+  color: var(--ios-tertiary);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+/* PCの月表示：日付のマスを押すと登録できることがわかるよう、マウスを乗せると色を変え「＋」を出す */
+#calendar:not(.calendar-compact) .fc-dayGridMonth-view .fc-daygrid-day {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  #calendar:not(.calendar-compact) .fc-daygrid-day:hover {
+    background-color: var(--ios-fill);
+  }
+}
+
+#calendar:not(.calendar-compact) .fc-daygrid-day-top {
+  position: relative;
+}
+
+#calendar:not(.calendar-compact) .fc-dayGridMonth-view .fc-daygrid-day:hover .fc-daygrid-day-top::before {
+  content: "+";
+  position: absolute;
+  top: 0.3rem;
+  left: 0.4rem;
+  color: var(--ios-blue);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.calendar-hint {
+  flex-basis: 100%;
+}
+
+/* スマートフォン：選んだ日の一覧の下の「＋ この日にやることを追加」 */
+.day-panel-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  margin: 0.5rem 1rem 0;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* ================================================================
+   動き（Apple Design の考え方にそって）
+   - 押した瞬間に反応し、離すとばねのように柔らかく戻る
+   - 出てきた方向へ戻っていく（行きと帰りが同じ道）
+   - 端末で「視差効果を減らす」などが選ばれていれば、それに従う
+   ================================================================ */
+
+/* 完了チェック：押した瞬間に色がつき、丸が軽く弾んでから、行が静かに薄くなる（app.js が .is-leaving をつける） */
+.todo-item.is-leaving .ios-check {
+  animation: check-pop 0.4s var(--ease-spring);
+}
+
+.todo-item.is-leaving .ios-row-body,
+.todo-item.is-leaving .ios-row-actions {
+  opacity: 0.35;
+  transition: opacity 0.3s ease;
+}
+
+.todo-item.is-leaving .todo-title {
+  color: var(--ios-secondary);
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 操作後のメッセージ：上から「すりガラスが現れる」ように出て、同じ道を上へ戻って消える */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.toast-message.is-hiding {
+  animation: toast-out 0.3s ease-in both;
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+    filter: blur(6px);
+  }
+}
+
+/* ページの切り替え：対応するブラウザ（Chrome・Safari の新しい版）では、画面が溶け込むように移り、
+   切り替えボタンの白い部分が、押した場所へすべるように動く。上下のバーは動かさない */
+@view-transition {
+  navigation: auto;
+}
+
+.app-bar {
+  view-transition-name: app-bar;
+}
+
+.tab-bar {
+  view-transition-name: tab-bar;
+}
+
+.segment.active {
+  view-transition-name: segment-thumb;
+}
+
+::view-transition-group(*) {
+  animation-duration: 0.38s;
+  animation-timing-function: var(--ease-spring);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.22s;
+}
+
+/* ================================================================
+   アクセシビリティ：端末の設定に合わせる
+   ================================================================ */
+
+/* 視差効果を減らす：動きはやめ、色の変化だけ残す */
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .segment:active,
+  .text-btn:active,
+  .pill-btn:active,
+  .check-hit:active .ios-check,
+  .fc .fc-button:active {
+    transform: none !important;
+  }
+}
+
+/* 透明度を下げる：すりガラスをやめ、不透明なバーにする */
+@media (prefers-reduced-transparency: reduce) {
+  .app-bar,
+  .tab-bar-glass,
+  .tab-bar-add,
+  .toast-message {
+    background-color: var(--ios-card) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* コントラストを上げる：境目の線をはっきりさせ、薄い文字を濃くする */
+@media (prefers-contrast: more) {
+  :root {
+    --ios-secondary: rgba(60, 60, 67, 0.85);
+    --ios-tertiary: rgba(60, 60, 67, 0.6);
+    --ios-separator: rgba(60, 60, 67, 0.5);
+  }
+
+  .app-bar {
+    border-bottom-color: var(--ios-separator);
+  }
+
+  .ios-list,
+  .ios-group,
+  .ios-card,
+  .empty-state {
+    box-shadow: 0 0 0 1px var(--ios-separator);
+  }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root {
+    --ios-secondary: rgba(235, 235, 245, 0.85);
+    --ios-tertiary: rgba(235, 235, 245, 0.6);
+    --ios-separator: rgba(235, 235, 245, 0.45);
+  }
+}
+
+/* ================================================================
+   見た目を大きく変えた部品（タイル・区切り・タブバー・浮かぶお知らせ）
+   ================================================================ */
+
+:root {
+  --ios-orange: #ff9500;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ios-orange: #ff9f0a;
+    --glass-bg: rgba(44, 44, 46, 0.72);
+    --glass-edge: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* --- 線のアイコン --- */
+
+.icon {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.plus-circle .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  stroke-width: 3;
+}
+
+/* --- 見出しと日付 --- */
+
+.page-header {
+  margin: 1rem 0;
+}
+
+.page-header .large-title {
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 0 0 0.15rem;
+  color: var(--ios-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 575.98px) {
+  /* スマートフォンでは、ページの切り替えは下のタブバーで行う */
+  .segmented {
+    display: none;
+  }
+
+  .app-bar-inner {
+    min-height: 44px;
+  }
+
+  .app-main {
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* --- 一覧ページの上のタイル（リマインダーのスマートリスト風） --- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+@media (min-width: 576px) {
+  .tiles {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.tile {
+  --tile-color: var(--ios-blue);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 0.75rem 0.875rem 0.7rem;
+  border-radius: var(--ios-radius);
+  background-color: var(--ios-card);
+  box-shadow: var(--ios-shadow);
+  color: var(--ios-label);
+  text-decoration: none;
+  transition: var(--press-out);
+}
+
+.tile:active {
+  transform: scale(0.96);
+  transition: var(--press-in);
+}
+
+@media (hover: hover) {
+  .tile:hover {
+    color: var(--ios-label);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+}
+
+.tile-overdue {
+  --tile-color: var(--ios-red);
+}
+
+.tile-later {
+  --tile-color: var(--ios-orange);
+}
+
+.tile-done {
+  --tile-color: var(--ios-gray);
+}
+
+.tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background-color: var(--tile-color);
+  color: #fff;
+}
+
+.tile-icon .icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke-width: 2.2;
+}
+
+.tile-count {
+  justify-self: end;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.tile-label {
+  grid-column: 1 / -1;
+  margin-top: 0.55rem;
+  color: var(--ios-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* --- 区切り（期限切れ・今日・明日・これから・期日なし） --- */
+
+.todo-section {
+  margin-bottom: 1.75rem;
+  scroll-margin-top: 4rem; /* タイルから飛んだとき、上のバーに隠れないように */
+}
+
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0.25rem 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-feature-settings: "palt";
+  letter-spacing: -0.01em;
+}
+
+.section-overdue {
+  color: var(--ios-red);
+}
+
+.section-today {
+  color: var(--ios-blue);
+}
+
+.section-tomorrow {
+  color: var(--ios-orange);
+}
+
+.section-someday {
+  color: var(--ios-secondary);
+}
+
+.section-count {
+  color: var(--ios-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- 一覧の行：行を押すと編集、右のごみ箱で削除 --- */
+
+.todo-link {
+  display: block;
+  /* 押せる範囲を行の上下いっぱいまで広げる */
+  margin: -0.75rem 0;
+  padding: 0.75rem 0;
   color: inherit;
   text-decoration: none;
+}
+
+.todo-link:hover {
+  color: inherit;
+}
+
+@media (hover: hover) {
+  .todo-item:has(.todo-link:hover) {
+    background-color: color-mix(in srgb, var(--ios-fill) 50%, transparent);
+  }
+}
+
+.todo-item:has(.todo-link:active) {
+  background-color: var(--ios-fill);
+  transition: none;
+}
+
+.ios-row-actions {
+  align-items: flex-start;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: -0.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ios-tertiary);
+  cursor: pointer;
+  transition: var(--press-out), color 0.2s ease;
+}
+
+.icon-btn .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+@media (hover: hover) {
+  .icon-btn-danger:hover {
+    background-color: color-mix(in srgb, var(--ios-red) 12%, transparent);
+    color: var(--ios-red);
+  }
+}
+
+.icon-btn:active {
+  transform: scale(0.88);
+  background-color: color-mix(in srgb, var(--ios-red) 14%, transparent);
+  color: var(--ios-red);
+  transition: var(--press-in);
+}
+
+.icon-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ios-blue) 40%, transparent);
+  outline-offset: 1px;
+}
+
+/* --- 空のとき --- */
+
+.empty-state-icon {
+  background-color: color-mix(in srgb, var(--ios-blue) 12%, transparent);
+  color: var(--ios-blue);
+}
+
+.empty-state-icon .icon {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+/* --- スマートフォンの下に浮かぶ、すりガラスのタブバー --- */
+
+.tab-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1030;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  pointer-events: none; /* バーのすき間では、下の内容を押せるように */
+}
+
+.tab-bar > * {
+  pointer-events: auto;
+}
+
+.tab-bar-glass {
+  display: flex;
+  flex: 1;
+  padding: 0.3rem;
+  border: 0.5px solid var(--glass-edge);
+  border-radius: 999px;
+  background-color: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+}
+
+.tab-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 0.4rem 0 0.3rem;
+  border-radius: 999px;
+  color: var(--ios-label);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: var(--press-out);
+}
+
+.tab-item .icon {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+.tab-item:hover {
+  color: var(--ios-label);
+}
+
+.tab-item.is-current {
+  background-color: var(--ios-fill);
+  color: var(--ios-blue);
+}
+
+.tab-item:active {
+  transform: scale(0.93);
+  transition: var(--press-in);
+}
+
+.tab-bar-add {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 50%;
+  background-color: var(--ios-blue);
+  color: #fff;
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ios-blue) 40%, transparent), 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: var(--press-out);
+}
+
+.tab-bar-add:hover {
+  color: #fff;
+}
+
+.tab-bar-add:active {
+  transform: scale(0.9);
+  transition: var(--press-in);
+}
+
+.tab-bar-add .icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  stroke-width: 2.5;
+}
+
+/* --- 操作後のお知らせ：画面の上に浮かぶカプセル --- */
+
+.toast-stack {
+  position: fixed;
+  top: calc(3.75rem + env(safe-area-inset-top));
+  right: 0;
+  left: 0;
+  z-index: 1040;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  pointer-events: none;
+}
+
+.toast-stack .toast-message {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 28rem;
+  margin: 0;
+  padding: 0.7rem 2.75rem 0.7rem 1rem;
+  border: 0.5px solid var(--glass-edge);
+  border-radius: 1.375rem;
+  background-color: var(--glass-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: var(--glass-shadow);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  pointer-events: auto;
+}
+
+.toast-icon {
+  display: inline-flex;
+  color: var(--ios-green);
+}
+
+.toast-warning .toast-icon {
+  color: var(--ios-orange);
+}
+
+.toast-stack .btn-close {
+  top: 50%;
+  padding: 0.6rem;
+  background-size: 0.65rem;
+  transform: translateY(-50%);
 }

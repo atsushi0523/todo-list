@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import tabs, todo_list with context %}
+{% from "_macros.html" import tabs, todo_list, empty_state with context %}
 
 {% block title %}完了済み | Todoリスト{% endblock %}
 
@@ -7,12 +7,9 @@
 {{ tabs(page, active_count, done_count) }}
 
 {% if todos %}
-<p class="small text-body-secondary">チェックを外すと、やることの一覧に戻ります。</p>
+<p class="list-caption">チェックを外すと、やることの一覧に戻ります。</p>
 {{ todo_list(todos, page) }}
 {% else %}
-<div class="card card-body text-center py-5 shadow-sm">
-  <p class="text-body-secondary mb-3">完了したやることはまだありません</p>
-  <div><a class="btn btn-outline-primary" href="{{ url_for('index') }}">やることの一覧へ</a></div>
-</div>
+{{ empty_state("完了したやることはまだありません", url_for('index'), "やることの一覧へ") }}
 {% endif %}
 {% endblock %}

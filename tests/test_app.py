@@ -55,8 +55,8 @@ def test_index_shows_counts(client, storage):
     storage.toggle(done["id"])
 
     html = client.get("/").get_data(as_text=True)
-    assert 'text-bg-primary">2</span>' in html
-    assert 'text-bg-secondary">1</span>' in html
+    assert html.count('segment-count">2</span>') == 1
+    assert html.count('segment-count">1</span>') == 1
 
 
 # --- 完了済みページ ---
@@ -364,10 +364,12 @@ def test_edit_can_set_and_clear_time(client, storage):
 
 
 def test_index_shows_time(client, storage):
-    storage.add("時刻つき", "", "2026-10-25", "14:30")
+    storage.add("時刻つき", "", days_from_today(0), "14:30")
+    storage.add("来年", "", "2099-01-10")
 
     html = client.get("/").get_data(as_text=True)
-    assert "2026-10-25 14:30" in html
+    assert "今日 14:30" in html
+    assert "2099/1/10(土)" in html
 
 
 def test_index_sorted_by_time_and_untimed_last(client, storage):
@@ -457,9 +459,8 @@ def test_calendar_shows_counts_in_tabs(client, storage):
     storage.toggle(done["id"])
 
     html = client.get("/calendar").get_data(as_text=True)
-    assert 'text-bg-primary">1</span>' in html
-    assert 'text-bg-secondary">1</span>' in html
-    assert 'class="nav-link active" href="/calendar"' in html
+    assert html.count('segment-count">1</span>') == 2
+    assert 'class="segment active" href="/calendar" aria-current="page"' in html
 
 
 def test_calendar_escapes_title(client, storage):
@@ -487,3 +488,56 @@ def test_unknown_next_goes_to_index(client, storage):
 
     res = client.post(f"/edit/{todo['id']}?next=https://example.com", data=valid_data())
     assert res.headers["Location"] == "/"
+
+
+# --- カレンダーから登録 ---
+
+
+def test_new_from_calendar_prefills_date(client):
+    html = client.get("/new?due_date=2026-11-20&next=calendar").get_data(as_text=True)
+
+    assert 'value="2026-11-20"' in html
+    assert 'href="/calendar"' in html  # キャンセルでカレンダーに戻る
+
+
+def test_new_ignores_invalid_date(client):
+    html = client.get("/new?due_date=2026-13-40").get_data(as_text=True)
+
+    assert "2026-13-40" not in html
+    assert 'value=""' in html or 'id="due_date" name="due_date" required type="date">' in html
+
+
+def test_new_from_calendar_returns_there(client, storage):
+    res = client.post("/new?next=calendar", data=valid_data(), follow_redirects=True)
+
+    assert res.request.path == "/calendar"
+    assert "登録しました" in res.get_data(as_text=True)
+    assert len(storage.list_all()) == 1
+
+
+def test_calendar_has_new_url(client):
+    html = client.get("/calendar").get_data(as_text=True)
+    assert 'data-new-url="/new"' in html
+
+
+def test_index_groups_into_sections(client, storage):
+    storage.add("過ぎたもの", "", "2000-01-01")
+    storage.add("いつかやる", "", "")
+    storage.add("ずっと先", "", "2099-01-10")
+
+    html = client.get("/").get_data(as_text=True)
+    # 期限切れ → これから → 期日なし の順に区切って出す
+    assert html.index('id="section-overdue"') < html.index("過ぎたもの") < html.index('id="section-later"')
+    assert html.index('id="section-later"') < html.index("ずっと先") < html.index('id="section-someday"')
+    assert html.index('id="section-someday"') < html.index("いつかやる")
+    assert 'id="section-today"' not in html  # 中身のない区切りは出さない
+    assert 'class="tiles"' in html
+
+
+def test_row_links_to_edit_and_has_delete(client, storage):
+    todo = storage.add("買い物", "", "2026-10-25")
+
+    html = client.get("/").get_data(as_text=True)
+    assert f'href="/edit/{todo["id"]}?next=index"' in html
+    assert f'action="/delete/{todo["id"]}"' in html
+    assert 'aria-label="「買い物」を削除"' in html

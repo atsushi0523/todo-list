@@ -1,11 +1,9 @@
 {% extends "base.html" %}
+{% from "_macros.html" import empty_state %}
 
 {% block title %}ページが見つかりません | Todoリスト{% endblock %}
 
 {% block content %}
-<div class="card card-body text-center py-5 shadow-sm">
-  <h1 class="h4">ページが見つかりません</h1>
-  <p class="text-body-secondary">指定されたやることは存在しないか、すでに削除されています。</p>
-  <div><a class="btn btn-primary" href="{{ url_for('index') }}">一覧に戻る</a></div>
-</div>
+<h1 class="large-title">ページが見つかりません</h1>
+{{ empty_state("指定されたやることは存在しないか、すでに削除されています。", url_for('index'), "一覧に戻る") }}
 {% endblock %}

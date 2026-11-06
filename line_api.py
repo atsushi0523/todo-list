@@ -1,6 +1,7 @@
 """LINE Messaging API との通信。
 
-使うのは「署名の確認」と「返信の送信」だけなので、line-bot-sdk は使わず標準ライブラリで書いている。
+使うのは「署名の確認」「返信の送信」「こちらからの送信（プッシュ）」だけなので、
+line-bot-sdk は使わず標準ライブラリで書いている。
 """
 
 import base64
@@ -10,6 +11,7 @@ import json
 import urllib.request
 
 REPLY_URL = "https://api.line.me/v2/bot/message/reply"
+PUSH_URL = "https://api.line.me/v2/bot/message/push"
 
 
 class LineApiError(Exception):
@@ -31,15 +33,23 @@ def verify_signature(channel_secret, body, signature):
 
 
 class LineClient:
-    """返信を送る。テストでは同じ reply メソッドを持つ偽物に差し替える"""
+    """メッセージを送る。テストでは同じ reply・push メソッドを持つ偽物に差し替える"""
 
     def __init__(self, access_token):
         self._access_token = access_token
 
     def reply(self, reply_token, messages):
-        body = json.dumps({"replyToken": reply_token, "messages": messages}, ensure_ascii=False).encode("utf-8")
+        """届いたメッセージへの返信。送信数には数えられない"""
+        self._post(REPLY_URL, {"replyToken": reply_token, "messages": messages}, "返信")
+
+    def push(self, to, messages):
+        """こちらから送る（通知）。無料プランでは月200通までなので、まとめて1回で送る"""
+        self._post(PUSH_URL, {"to": to, "messages": messages}, "送信")
+
+    def _post(self, url, payload, action):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
-            REPLY_URL,
+            url,
             data=body,
             method="POST",
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._access_token}"},
@@ -49,4 +59,4 @@ class LineClient:
                 pass
         except Exception as e:
             detail = e.read().decode("utf-8", "replace") if hasattr(e, "read") else str(e)
-            raise LineApiError(f"LINEへの返信に失敗しました: {detail}") from e
+            raise LineApiError(f"LINEへの{action}に失敗しました: {detail}") from e

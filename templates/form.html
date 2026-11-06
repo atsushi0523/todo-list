@@ -1,33 +1,40 @@
 {% extends "base.html" %}
 
 {% macro field(f) %}
-<div class="mb-3">
-  {{ f.label(class="form-label fw-semibold") }}
-  {% if f.flags.required %}<span class="badge text-bg-secondary ms-1">必須</span>{% endif %}
-  {{ f(class="form-control" ~ (" is-invalid" if f.errors else ""), **kwargs) }}
+<div class="form-row-ios">
+  <label class="form-label-ios" for="{{ f.id }}">
+    {{ f.label.text }}{% if f.flags.required %}<span class="required-mark">必須</span>{% endif %}
+  </label>
+  {{ f(class="form-control ios-input" ~ (" is-invalid" if f.errors else ""), **kwargs) }}
   {% for error in f.errors %}
   <div class="invalid-feedback">{{ error }}</div>
   {% endfor %}
-  {% if f.description %}<div class="form-text">{{ f.description }}</div>{% endif %}
+  {% if f.description %}<div class="form-hint">{{ f.description }}</div>{% endif %}
 </div>
 {% endmacro %}
 
 {% block title %}{{ heading }} | Todoリスト{% endblock %}
 
 {% block content %}
-<h1 class="h4 mb-3">{{ heading }}</h1>
+<a class="back-link" href="{{ back_url }}"><span aria-hidden="true">‹</span> 戻る</a>
+<h1 class="large-title">{{ heading }}</h1>
 
-<form method="post" class="card card-body shadow-sm">
+<form method="post">
   {{ form.csrf_token }}
-  {{ field(form.title) }}
-  {{ field(form.content, rows=5) }}
-  <div class="row g-sm-3">
-    <div class="col-sm-6">{{ field(form.due_date) }}</div>
-    <div class="col-sm-6">{{ field(form.due_time) }}</div>
+  <div class="ios-group">
+    {{ field(form.title) }}
+    {{ field(form.content, rows=4) }}
   </div>
-  <div class="d-flex gap-2">
-    {{ form.submit(class="btn btn-primary") }}
-    <a class="btn btn-outline-secondary" href="{{ back_url }}">キャンセル</a>
+  <div class="ios-group ios-group-split">
+    {{ field(form.due_date) }}
+    {{ field(form.due_time) }}
+  </div>
+  <div class="form-actions">
+    {{ form.submit(class="pill-btn pill-btn-lg") }}
+    <a class="text-btn" href="{{ back_url }}">キャンセル</a>
   </div>
 </form>
 {% endblock %}
+
+{# フォームの画面では、下の「新規登録」は出さない #}
+{% block toolbar %}{% endblock %}
