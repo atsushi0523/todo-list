@@ -16,6 +16,7 @@
 - 期限切れの強調表示（期日を過ぎた未完了のものを赤で表示。時刻つきのものは、その時刻を過ぎたら）
 - カレンダー表示（月表示とリスト表示。予定を押すと編集ページを開く。スマートフォンでは最初にリスト表示）
 - 削除（確認ダイアログあり）
+- LINEで確認・完了（LINEで「一覧」「今日」と送ると、未完了のやることが「完了」ボタンつきで届く。ボタンを押すと完了になる）
 - 入力チェック（タイトル必須・100文字以内、内容1000文字以内、期日必須・正しい日付、時刻は任意・正しい時刻）
 - スマートフォン対応
 
@@ -27,6 +28,7 @@
 | Webフレームワーク | Flask / Jinja2 |
 | フォーム・CSRF対策 | Flask-WTF / WTForms |
 | スプレッドシート連携 | gspread / google-auth（サービスアカウント） |
+| LINE連携 | LINE Messaging API（Flex Message、ポストバック） |
 | 見た目 | Bootstrap 5 / FullCalendar 6（カレンダー） |
 | テスト | pytest |
 | 本番 | Vercel（サーバーレス関数） |
@@ -34,14 +36,17 @@
 ## 構成
 
 ```
-[ブラウザ] ──HTTP──▶ [Flaskアプリ（Vercel）] ──Sheets API──▶ [Googleスプレッドシート]
-                              │
-                              └─ サービスアカウントの鍵（環境変数）で認証
+[ブラウザ] ──HTTP──────▶ [Flaskアプリ（Vercel）] ──Sheets API──▶ [Googleスプレッドシート]
+                                 ▲   │
+[LINE] ──Webhook（署名つき）─────┘   └──返信──▶ [LINE]
 ```
 
 | ファイル | 役割 |
 | --- | --- |
-| `app.py` | ルーティング、エラー処理 |
+| `app.py` | ルーティング、エラー処理、LINEのWebhookの受け取り |
+| `todos.py` | 並び替え・期限切れの判定など（WebとLINEで共通） |
+| `line_api.py` | LINEとの通信（署名の確認、返信の送信） |
+| `line_bot.py` | LINEの返事の組み立て（一覧・今日・完了ボタン） |
 | `sheets.py` | 保存先の処理（`MemoryStorage` と `SheetsStorage`） |
 | `forms.py` | フォームの定義と入力チェック |
 | `templates/` | 一覧・カレンダー・フォーム・エラーのHTML |
@@ -122,6 +127,23 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 > - `STORAGE=memory` はVercelでは使えません（データがサーバーごとにばらばらになり、すぐに消えます）。本番は必ず `sheets` にしてください
 > - 環境変数を変えたあとは、「Deployments」から再デプロイすると反映されます
 
+## LINEとつなぐ
+
+1. [LINE公式アカウント](https://entry.line.biz/start/jp/) を作り、[LINE Official Account Manager](https://manager.line.biz/) の「設定」→「Messaging API」で Messaging API を有効にする
+2. 同じく「設定」→「応答設定」で、**応答メッセージをオフ**、**Webhookをオン** にする
+3. [LINE Developers](https://developers.line.biz/console/) でチャネルを開き、次の値を `.env`（本番はVercelの環境変数）に設定する
+
+| 変数名 | どこにあるか |
+| --- | --- |
+| `LINE_CHANNEL_SECRET` | 「チャネル基本設定」タブのチャネルシークレット |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 「Messaging API設定」タブのチャネルアクセストークン（長期） |
+| `LINE_OWNER_USER_ID` | 「チャネル基本設定」タブのあなたのユーザーID。このユーザー以外からの操作には反応しない |
+
+4. 「Messaging API設定」タブの Webhook URL に `https://<デプロイ先のドメイン>/line/webhook` を設定し、「Webhookの利用」をオンにする
+5. botを友だち追加して、「一覧」や「今日」と送る
+
+> LINEのWebhookはインターネットから届くので、ローカル（127.0.0.1）では受け取れません。動きはテストで確かめ、実際のやり取りはデプロイしてから試します。
+
 ## 工夫した点
 
 - **行番号ではなくidで特定する**：削除で行番号がずれても、編集・削除の対象を取り違えないように、UUIDで行を探す
@@ -131,11 +153,15 @@ GOOGLE_SERVICE_ACCOUNT_JSON=service-account.json
 - **値はRAWで書き込む**：スプレッドシート側で日付の形式が勝手に変わらないようにする
 - **日時は日本時間で記録する**：サーバーの時刻設定に左右されない
 - **カレンダーのデータはページに埋め込む**：APIを増やさず、一覧と同じく読み込み1回で表示する。JSONは Jinja2 の `tojson` で埋め込み、タイトルに `</script>` が含まれていても安全にしている
-- **セキュリティ**：CSRF対策（Flask-WTF）、テンプレートのエスケープ（XSS対策）。データを変える操作はすべてPOST。削除の確認メッセージはHTMLの属性から読み、インラインのJavaScriptにタイトルを埋め込まない
+- **LINEは返信だけで答える**：無料プランは送信できるメッセージ数に上限があるが、返信は数えられない。確認や完了の操作はすべて返信で返している
+- **LINEの「完了」ボタンは2回押しても安全**：切り替えではなく「完了にする」操作にしているので、押し直しても未完了に戻らない
+- **ライブラリを増やさない**：LINEで使うのは署名の確認と返信だけなので、line-bot-sdk は使わず標準ライブラリで書いた
+- **セキュリティ**：CSRF対策（Flask-WTF）、テンプレートのエスケープ（XSS対策）。データを変える操作はすべてPOST。削除の確認メッセージはHTMLの属性から読み、インラインのJavaScriptにタイトルを埋め込まない。LINEのWebhookは署名を確かめ、本物のLINEから、本人が送ったものだけを受け付ける
 
 ## 今後の予定
 
-- LINE連携（LINEでの確認・完了、期日前と毎朝の通知）
+- LINEへの通知（期日の1時間前・30分前、毎朝の進捗）
+- LINEの中での登録・編集（LIFF）
 - ログインとユーザーごとのリスト（LINEログインを検討中）
 
 くわしくは [要件定義書](要件定義書.md) の9章を参照してください。

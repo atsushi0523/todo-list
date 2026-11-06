@@ -1,35 +1,17 @@
 """Todoリスト Webアプリのルーティング"""
 
+import json
 import os
 
 from dotenv import load_dotenv
 from flask import Flask, abort, flash, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFError, CSRFProtect
 
+import line_bot
 from forms import TodoForm
+from line_api import LineApiError, LineClient, verify_signature
 from sheets import StorageError, create_storage, now_jst
-
-
-def sort_active(todos):
-    """未完了のやることを期日・時刻の近い順に並べる。時刻のないものはその日の最後にする"""
-    return sorted(
-        todos,
-        key=lambda todo: (todo["due_date"] or "9999-12-31", todo.get("due_time") or "99:99", todo["created_at"]),
-    )
-
-
-def is_overdue(todo, now):
-    """期限切れかどうか。時刻つきなら期日と時刻を過ぎたとき、時刻なしなら期日が今日より前のとき"""
-    if not todo["due_date"]:
-        return False
-    if todo.get("due_time"):
-        return f"{todo['due_date']} {todo['due_time']}" < now.strftime("%Y-%m-%d %H:%M")
-    return todo["due_date"] < now.strftime("%Y-%m-%d")
-
-
-def sort_done(todos):
-    """完了済みのやることを、完了した（最後に更新した）日時の新しい順に並べる"""
-    return sorted(todos, key=lambda todo: todo["updated_at"], reverse=True)
+from todos import is_overdue, sort_active, sort_done
 
 
 # 操作のあとに戻れるページ（フォームやURLの next の値 → エンドポイント名）
@@ -72,18 +54,22 @@ def calendar_events(todos, now):
     return events
 
 
-def create_app(storage=None, config=None):
+def create_app(storage=None, config=None, line_client=None):
     load_dotenv()
 
     app = Flask(__name__)
     # SECRET_KEY が未設定なら起動ごとにランダムな値を使う（本番では必ず環境変数で設定する）
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or os.urandom(32).hex()
+    for name in ("LINE_CHANNEL_SECRET", "LINE_CHANNEL_ACCESS_TOKEN", "LINE_OWNER_USER_ID"):
+        app.config[name] = os.environ.get(name, "")
     if config:
         app.config.update(config)
-    CSRFProtect(app)
+    csrf = CSRFProtect(app)
 
     if storage is None:
         storage = create_storage()
+    if line_client is None:
+        line_client = LineClient(app.config["LINE_CHANNEL_ACCESS_TOKEN"])
 
     def load_todos():
         """未完了と完了済みに分けて返す。Sheets APIの回数制限があるので、1回の表示で読み込むのは1回だけ"""
@@ -161,6 +147,34 @@ def create_app(storage=None, config=None):
         else:
             flash("完了にしました。完了済みページで確認できます", "success")
         return redirect(url_for(back_endpoint()))
+
+    @app.post("/line/webhook")
+    @csrf.exempt  # LINEのサーバーから届くのでCSRFトークンはない。代わりに署名で本物かを確かめる
+    def line_webhook():
+        body = request.get_data()
+        if not verify_signature(app.config["LINE_CHANNEL_SECRET"], body, request.headers.get("X-Line-Signature")):
+            app.logger.warning("LINEの署名が一致しないWebhookを拒否しました")
+            abort(400)
+
+        owner = app.config["LINE_OWNER_USER_ID"]
+        web_url = url_for("index", _external=True, _scheme="https")
+        for event in json.loads(body).get("events", []):
+            # 当面は自分専用。LINE_OWNER_USER_ID 以外の人からの操作には何もしない
+            if not owner or event.get("source", {}).get("userId") != owner or not event.get("replyToken"):
+                continue
+            try:
+                messages = line_bot.handle_event(event, storage, now_jst(), web_url)
+            except StorageError as e:
+                app.logger.error("保存先との通信に失敗しました", exc_info=e)
+                messages = [line_bot.text_message(str(e))]
+            if not messages:
+                continue
+            try:
+                line_client.reply(event["replyToken"], messages)
+            except LineApiError as e:
+                app.logger.error(str(e))
+        # 返信に失敗しても 200 を返す（LINEに何度も送り直させないため）
+        return "OK"
 
     @app.errorhandler(404)
     def not_found(e):
